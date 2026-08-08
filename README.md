@@ -45,13 +45,19 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/ai.lykuro.private-gateway
 
 **Windows (管理者 PowerShell)**
 
+インストーラスクリプトが取得・SHA-256検証・配置・常駐登録まで行います:
+
 ```powershell
-New-Item -ItemType Directory -Force "C:\Program Files\Lykuro\PrivateGateway", "C:\ProgramData\Lykuro\Gateway"
-Copy-Item private-gateway_<ver>_windows_amd64.exe "C:\Program Files\Lykuro\PrivateGateway\private-gateway.exe"
-Copy-Item gateway.yaml "C:\ProgramData\Lykuro\Gateway\gateway.yaml"
-Copy-Item install-token.txt "C:\ProgramData\Lykuro\Gateway\install-token.txt"
-powershell -ExecutionPolicy Bypass -File deploy\native\install-task.ps1
+irm https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/native/install.ps1 | iex
 ```
+
+実行後、表示される手順に従って `gateway.yaml` と `install-token.txt` を配置し、
+`Start-ScheduledTask -TaskName LykuroPrivateGateway` で起動します。
+
+> **Note**: ブラウザで exe を直接ダウンロードすると、コード署名が無いため
+> SmartScreen の警告が出ます(ウイルス検出ではなく発行元実績のブロック)。
+> 上記スクリプト経由なら発生しません。手動導入する場合は checksums.txt と
+> SHA-256 を突合のうえ「詳細情報 → 実行」または `Unblock-File` してください。
 
 **Docker Compose** — `deploy/docker-compose.example.yaml` 参照(`--build` でこのリポジトリからビルド)。
 
