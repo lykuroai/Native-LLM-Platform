@@ -47,6 +47,20 @@ $env:LYKURO_INSTALL_TOKEN_FILE = ".\install-token.txt"
 
 `LYKURO_INSTALL_TOKEN_FILE` は初回登録時のみ参照されます(登録後は削除可)。
 
+### 5. 管理コンソール(SaaS)接続
+
+app.lykuro.ai への登録・heartbeat・署名済み設定の受信は、以下の環境変数を
+設定した場合のみ有効になります(未設定ならスタンドアロン動作)。
+
+| 環境変数 | 値 |
+|----------|-----|
+| `LYKURO_CONTROL_PLANE_URL` | `https://api.lykuro.ai` |
+| `LYKURO_DATA_DIR` | Agent資格情報・設定世代の保存先(既定 `/var/lib/lykuro/gateway`) |
+| `LYKURO_SIGNING_PUB_FILE` | 配信設定の署名検証用 Ed25519 公開鍵(Lykuroから提供) |
+| `LYKURO_INSTALL_TOKEN_FILE` | 初回登録トークンのファイルパス |
+| `LYKURO_HEARTBEAT_INTERVAL_SECONDS` | 任意(既定 60) |
+| `LYKURO_CONFIG_POLL_INTERVAL_SECONDS` | 任意(既定 300) |
+
 **Docker Compose** — `deploy/docker-compose.example.yaml` 参照(`--build` でこのリポジトリからビルド)。
 
 **Kubernetes (Helm)** — `deploy/helm/lykuro-private-gateway/` 参照。
