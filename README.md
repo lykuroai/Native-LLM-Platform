@@ -20,45 +20,32 @@ Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環�
 
 app.lykuro.ai の Gateway 詳細画面で発行したトークン(有効期限24時間・1回限り)を `install-token.txt` へ保存します。shell 引数・環境変数へ直接書かないでください。
 
-### 4. サービスとして起動
+### 4. 起動
 
-**Linux (systemd)**
+単一の実行ファイルをそのまま起動するだけです(サービス登録は不要。常駐化したい場合は systemd / launchd / タスクスケジューラ等、各環境の流儀で自由にラップしてください)。
 
-```bash
-sudo install -D -m 0755 private-gateway_<ver>_linux_amd64 /opt/lykuro/private-gateway/bin/private-gateway
-sudo install -D -m 0640 gateway.yaml /etc/lykuro/gateway/gateway.yaml
-sudo install -D -m 0600 install-token.txt /etc/lykuro/gateway/install-token.txt
-sudo cp deploy/native/lykuro-private-gateway.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now lykuro-private-gateway
-```
-
-**macOS (launchd)**
+**Linux / macOS**
 
 ```bash
-sudo install -d /opt/lykuro/private-gateway/bin /etc/lykuro/gateway /var/log/lykuro
-sudo install -m 0755 private-gateway_<ver>_darwin_arm64 /opt/lykuro/private-gateway/bin/private-gateway
-sudo install -m 0640 gateway.yaml /etc/lykuro/gateway/gateway.yaml
-sudo install -m 0600 install-token.txt /etc/lykuro/gateway/install-token.txt
-sudo cp deploy/native/ai.lykuro.private-gateway.plist /Library/LaunchDaemons/
-sudo launchctl bootstrap system /Library/LaunchDaemons/ai.lykuro.private-gateway.plist
+chmod +x private-gateway_<ver>_<os>_<arch>
+LYKURO_INSTALL_TOKEN_FILE=./install-token.txt \
+  ./private-gateway_<ver>_<os>_<arch> serve -config gateway.yaml
 ```
 
-**Windows (管理者 PowerShell)**
-
-インストーラスクリプトが取得・SHA-256検証・配置・常駐登録まで行います:
+**Windows (PowerShell)** — zip を展開して実行:
 
 ```powershell
-irm https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/native/install.ps1 | iex
+Expand-Archive private-gateway_<ver>_windows_amd64.zip .
+$env:LYKURO_INSTALL_TOKEN_FILE = ".\install-token.txt"
+.\private-gateway_<ver>_windows_amd64.exe serve -config gateway.yaml
 ```
 
-実行後、表示される手順に従って `gateway.yaml` と `install-token.txt` を配置し、
-`Start-ScheduledTask -TaskName LykuroPrivateGateway` で起動します。
+> **Note**: Windows 版は zip で配布しています。zip の SHA-256 を checksums.txt と
+> 突合のうえ展開してください。コード署名が無いため、初回実行時に SmartScreen の
+> 警告(発行元実績のブロック)が出た場合は「詳細情報 → 実行」または
+> `Unblock-File` で解除します。
 
-> **Note**: Windows 版は zip(`private-gateway_<ver>_windows_amd64.zip`)で
-> 配布しています。手動導入する場合は zip の SHA-256 を checksums.txt と
-> 突合のうえ展開してください。コード署名が無いため、初回実行時に
-> SmartScreen の警告(発行元実績のブロック)が出た場合は
-> 「詳細情報 → 実行」または `Unblock-File` で解除します。
+`LYKURO_INSTALL_TOKEN_FILE` は初回登録時のみ参照されます(登録後は削除可)。
 
 **Docker Compose** — `deploy/docker-compose.example.yaml` 参照(`--build` でこのリポジトリからビルド)。
 
@@ -79,7 +66,7 @@ private-gateway upgrade -to <version> -file compose/docker-compose.yml   # compo
 private-gateway version
 ```
 
-ネイティブバイナリのアップグレードは、新バージョンを取得・検証のうえ、サービス停止 → バイナリ差替 → サービス起動で行います(旧バイナリを `.bak` として残すと即時ロールバックできます)。
+アップグレードは新バージョンを取得・検証のうえ、プロセス停止 → バイナリ差替 → 再起動で行います(旧バイナリを `.bak` として残すと即時ロールバックできます)。
 
 ## リポジトリ構成
 
@@ -90,7 +77,7 @@ private-gateway version
 | `platform/` | Native LLM Platform 統合(contract / orchestrator / memory ほか) |
 | `sign/` | Ed25519 署名・ライセンス・正規形JSON(SaaS 側と共有) |
 | `token/` | トークン生成・ハッシュ(SaaS 側と共有) |
-| `deploy/` | systemd / launchd / Windows / Compose / Helm |
+| `deploy/` | Docker Compose / Helm(任意。CLI 単体でも動作) |
 
 ## License
 
