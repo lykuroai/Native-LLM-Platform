@@ -1,0 +1,20 @@
+# Lykuro Native LLM Platform - Private Gateway 設定テンプレート
+# このファイルを gateway.yaml へコピーして編集してください。
+# secret(トークン・鍵)はこのファイルへ書かず、secret file を使用します。
+schema_version: "1"
+gateway:
+  # 管理コンソール(app.lykuro.ai)で作成した Gateway の ID
+  id: "00000000-0000-0000-0000-000000000000"
+  strict_local_mode: true
+  log_content: false
+control_plane:
+  url: "https://app.lykuro.ai"
+  heartbeat_interval_seconds: 60
+  config_poll_interval_seconds: 300
+runtime:
+  # vllm | ollama | tgi | openai_compatible
+  type: "openai_compatible"
+  # ローカルLLM Runtime のエンドポイントURL
+  endpoint: "http://localhost:8000"
+policy:
+  default_routing: local-only

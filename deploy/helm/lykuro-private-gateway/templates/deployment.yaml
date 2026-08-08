@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pgw.fullname" . }}
+  labels:
+    {{- include "pgw.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.persistence.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- else }}
+  # 資格情報・LKG を単一 PVC に置くため MVP は 1 replica(HA は将来 RWX/外部化で)
+  replicas: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "pgw.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pgw.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Values.gateway.config | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8443
+          env:
+            - name: LYKURO_CONFIG_PATH
+              value: /etc/lykuro/gateway/gateway.yaml
+            - name: LYKURO_DATA_DIR
+              value: /var/lib/lykuro/gateway
+            {{- if .Values.controlPlane.url }}
+            - name: LYKURO_CONTROL_PLANE_URL
+              value: {{ .Values.controlPlane.url | quote }}
+            - name: LYKURO_INSTALL_TOKEN_FILE
+              value: /etc/lykuro/secrets/token
+            {{- end }}
+            {{- if .Values.license.secretName }}
+            - name: LYKURO_LICENSE_FILE
+              value: /etc/lykuro/license/offline-license.json
+            {{- end }}
+            {{- if or .Values.controlPlane.url .Values.license.secretName }}
+            - name: LYKURO_SIGNING_PUB_FILE
+              value: /etc/lykuro/keys/lykuro-signing.pub
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/lykuro/gateway
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/lykuro/gateway
+            {{- if or .Values.controlPlane.url .Values.license.secretName }}
+            - name: signing-pub
+              mountPath: /etc/lykuro/keys
+              readOnly: true
+            {{- end }}
+            {{- if .Values.controlPlane.url }}
+            - name: install-token
+              mountPath: /etc/lykuro/secrets
+              readOnly: true
+            {{- end }}
+            {{- if .Values.license.secretName }}
+            - name: license
+              mountPath: /etc/lykuro/license
+              readOnly: true
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "pgw.fullname" . }}-config
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pgw.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if or .Values.controlPlane.url .Values.license.secretName }}
+        - name: signing-pub
+          configMap:
+            name: {{ .Values.controlPlane.signingPubConfigMapName }}
+        {{- end }}
+        {{- if .Values.controlPlane.url }}
+        - name: install-token
+          secret:
+            secretName: {{ .Values.controlPlane.installTokenSecretName }}
+        {{- end }}
+        {{- if .Values.license.secretName }}
+        - name: license
+          secret:
+            secretName: {{ .Values.license.secretName }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

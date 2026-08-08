@@ -1,0 +1,59 @@
+# Lykuro Private LLM Gateway — Helm values (Enterprise Edition, BD §5.2)
+# secret(install token・TLS鍵)は values に書かず、既存 Secret を参照する。
+
+image:
+  repository: registry.lykuro.ai/private-gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+gateway:
+  # gateway.yaml の内容(ConfigMap 化)。key_hash のみでsecretは含まれない。
+  config: |
+    schema_version: "1"
+    gateway:
+      id: "REPLACE_WITH_GATEWAY_ID"
+      listen: ":8443"
+      allowed_data_classes: [public]
+    auth:
+      virtual_keys: []
+    models:
+      - logical_name: company-llm
+        runtime: vllm
+        endpoint: "http://vllm.default.svc:8000"
+        physical_model: REPLACE_WITH_MODEL
+
+controlPlane:
+  # 空 = Air-Gapped(スタンドアロン)。設定時は Agent が register/heartbeat する。
+  url: ""
+  # 初回登録トークンの Secret 名(kubectl create secret generic lykuro-install-token
+  # --from-file=token=./install-token.txt)。url 設定時のみ使用。
+  installTokenSecretName: lykuro-install-token
+  # 検証用公開鍵(配布物同梱の lykuro-signing.pub)を入れた ConfigMap 名
+  signingPubConfigMapName: lykuro-signing-pub
+
+license:
+  # オフラインライセンス(offline-license.json)の Secret 名。空 = ライセンスなし運転
+  secretName: ""
+
+persistence:
+  # Agent 資格情報・設定世代(LKG)の保存先。制御プレーン連携時は必須
+  enabled: true
+  size: 1Gi
+  storageClassName: ""
+
+service:
+  type: ClusterIP
+  port: 8443
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

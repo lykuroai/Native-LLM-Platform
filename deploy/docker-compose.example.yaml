@@ -1,0 +1,23 @@
+# Lykuro Native LLM Platform - Docker Compose example
+# イメージは本リポジトリの Dockerfile からビルドする:
+#   docker compose -f deploy/docker-compose.example.yaml up -d --build
+services:
+  lykuro-private-gateway:
+    build:
+      context: ..
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./config:/etc/lykuro/gateway:ro
+      - lykuro-gateway-state:/var/lib/lykuro/gateway
+    environment:
+      LYKURO_CONFIG_PATH: /etc/lykuro/gateway/gateway.yaml
+    # install token は環境変数ではなく secret file で渡す
+    secrets:
+      - lykuro_install_token
+secrets:
+  lykuro_install_token:
+    file: ./install-token.txt
+volumes:
+  lykuro-gateway-state:

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: lykuro-private-gateway
+description: Lykuro Private LLM Gateway — customer-side OpenAI-compatible gateway for local LLM runtimes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
