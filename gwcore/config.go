@@ -323,7 +323,7 @@ func (c *Config) CloudEligible(def *ModelDef, dataClass, routingMode string) boo
 }
 
 // validRuntimeAdapter reports whether t is a known local runtime type
-// (SaaS 側 internal/model の PGWRuntimeAdapter と同一の値集合)。
+// (対応 Runtime の種別。追加時は README も更新すること)。
 func validRuntimeAdapter(t string) bool {
 	switch t {
 	case "vllm", "ollama", "tgi", "openai_compatible":

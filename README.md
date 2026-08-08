@@ -89,8 +89,8 @@ private-gateway version
 | `cmd/private-gateway/` | CLI エントリポイント |
 | `gwcore/` | ゲートウェイ本体(認証・プロキシ・設定・メトリクス・SaaS Agent) |
 | `platform/` | Native LLM Platform 統合(contract / orchestrator / memory ほか) |
-| `sign/` | Ed25519 署名・ライセンス・正規形JSON(SaaS 側と共有) |
-| `token/` | トークン生成・ハッシュ(SaaS 側と共有) |
+| `sign/` | Ed25519 署名・ライセンス・正規形JSON(安定公開API) |
+| `token/` | トークン生成・ハッシュ(安定公開API) |
 | `deploy/` | Docker Compose / Helm(任意。CLI 単体でも動作) |
 
 ## License

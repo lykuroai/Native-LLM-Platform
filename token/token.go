@@ -19,7 +19,7 @@ const tokenAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789
 
 // RandomTokenSegment returns n uniformly distributed characters.
 // crypto/rand.Int の棄却サンプリングを使う(バイト剰余方式は 256 mod 57 = 28
-// の剰余バイアスが出る。internal/auth/apikey.go と同方式に統一)。
+// の剰余バイアスが出る)。
 func RandomTokenSegment(n int) (string, error) {
 	maxIdx := big.NewInt(int64(len(tokenAlphabet)))
 	buf := make([]byte, n)

@@ -291,7 +291,7 @@ func (c *Config) FindEndpoint(id string) *RuntimeEndpoint {
 }
 
 // ValidDataClass reports whether c is a known data classification (BD §11.1)。
-// SaaS 側 internal/model の定義と同一の値集合を保つこと。
+// 値集合の変更は配信 config の互換性に影響する(semver メジャー)。
 func ValidDataClass(c string) bool {
 	switch c {
 	case "public", "internal", "confidential", "restricted":
