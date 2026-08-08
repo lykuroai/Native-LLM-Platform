@@ -1,20 +1,28 @@
 # Lykuro Native LLM Platform - Private Gateway 設定テンプレート
 # このファイルを gateway.yaml へコピーして編集してください。
+# 検証: private-gateway config validate -config gateway.yaml
 # secret(トークン・鍵)はこのファイルへ書かず、secret file を使用します。
 schema_version: "1"
 gateway:
   # 管理コンソール(app.lykuro.ai)で作成した Gateway の ID
   id: "00000000-0000-0000-0000-000000000000"
+  # 省略時 ":8443"
+  listen: ":8443"
   strict_local_mode: true
-  log_content: false
-control_plane:
-  url: "https://app.lykuro.ai"
-  heartbeat_interval_seconds: 60
-  config_poll_interval_seconds: 300
-runtime:
-  # vllm | ollama | tgi | openai_compatible
-  type: "openai_compatible"
-  # ローカルLLM Runtime のエンドポイントURL
-  endpoint: "http://localhost:8000"
-policy:
-  default_routing: local-only
+  # 許可するデータ分類(public / internal / confidential / restricted)
+  allowed_data_classes: ["public"]
+auth:
+  virtual_keys:
+    # `private-gateway genkey` で発行し、表示された key_hash をここへ貼る。
+    # 原文キー(lkpgw_...)は利用アプリへ安全に配布する(この設定には書かない)。
+    - id: vk-example
+      name: example-app
+      key_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+models:
+  # logical_name はクライアントが指定するモデル名。runtime は
+  # vllm | ollama | tgi | openai_compatible。endpoint は OpenAI 互換 API の
+  # ベースURL(パス /v1 を含めない)。
+  - logical_name: qwen3-8b
+    runtime: openai_compatible
+    endpoint: "http://localhost:8000"
+    physical_model: qwen3-8b
