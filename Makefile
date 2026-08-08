@@ -21,6 +21,8 @@ dist:
 	GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o $(DIST)/private-gateway_$(VERSION)_darwin_amd64 ./cmd/private-gateway/
 	GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o $(DIST)/private-gateway_$(VERSION)_darwin_arm64 ./cmd/private-gateway/
 	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o $(DIST)/private-gateway_$(VERSION)_windows_amd64.exe ./cmd/private-gateway/
+	# Windows は zip で配布(ブラウザの無署名exe直DLブロック回避。-m で元exeを削除)
+	cd $(DIST) && zip -q -m private-gateway_$(VERSION)_windows_amd64.zip private-gateway_$(VERSION)_windows_amd64.exe
 	cd $(DIST) && shasum -a 256 private-gateway_* > checksums.txt
 
 clean:

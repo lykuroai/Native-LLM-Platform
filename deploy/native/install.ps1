@@ -25,23 +25,27 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 if ($Version -eq "") {
   $Version = (Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest").tag_name
 }
+$zipName = "private-gateway_${Version}_windows_amd64.zip"
 $exeName = "private-gateway_${Version}_windows_amd64.exe"
 $base    = "https://github.com/$repo/releases/download/$Version"
 $tmp     = Join-Path $env:TEMP "lykuro-pgw-$Version"
 New-Item -ItemType Directory -Force $tmp | Out-Null
 
-Write-Host "downloading $exeName ($Version)..."
-Invoke-WebRequest "$base/$exeName"        -OutFile (Join-Path $tmp $exeName)
+Write-Host "downloading $zipName ($Version)..."
+Invoke-WebRequest "$base/$zipName"        -OutFile (Join-Path $tmp $zipName)
 Invoke-WebRequest "$base/checksums.txt"   -OutFile (Join-Path $tmp "checksums.txt")
 
 # SHA-256 検証(不一致は即中止)
-$expected = (Select-String -Path (Join-Path $tmp "checksums.txt") -Pattern ([regex]::Escape($exeName))).Line.Split(' ')[0]
-if (-not $expected) { throw "checksums.txt に $exeName のエントリがありません" }
-$actual = (Get-FileHash (Join-Path $tmp $exeName) -Algorithm SHA256).Hash.ToLower()
+$expected = (Select-String -Path (Join-Path $tmp "checksums.txt") -Pattern ([regex]::Escape($zipName))).Line.Split(' ')[0]
+if (-not $expected) { throw "checksums.txt に $zipName のエントリがありません" }
+$actual = (Get-FileHash (Join-Path $tmp $zipName) -Algorithm SHA256).Hash.ToLower()
 if ($actual -ne $expected.ToLower()) {
   throw "SHA-256 不一致: expected=$expected actual=$actual — ダウンロードが破損または改ざんされています"
 }
 Write-Host "checksum OK: $actual"
+Unblock-File (Join-Path $tmp $zipName)
+Expand-Archive -Path (Join-Path $tmp $zipName) -DestinationPath $tmp -Force
+if (-not (Test-Path (Join-Path $tmp $exeName))) { throw "zip 内に $exeName がありません" }
 Unblock-File (Join-Path $tmp $exeName)
 
 # 配置

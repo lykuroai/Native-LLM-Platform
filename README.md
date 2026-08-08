@@ -54,10 +54,11 @@ irm https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/n
 実行後、表示される手順に従って `gateway.yaml` と `install-token.txt` を配置し、
 `Start-ScheduledTask -TaskName LykuroPrivateGateway` で起動します。
 
-> **Note**: ブラウザで exe を直接ダウンロードすると、コード署名が無いため
-> SmartScreen の警告が出ます(ウイルス検出ではなく発行元実績のブロック)。
-> 上記スクリプト経由なら発生しません。手動導入する場合は checksums.txt と
-> SHA-256 を突合のうえ「詳細情報 → 実行」または `Unblock-File` してください。
+> **Note**: Windows 版は zip(`private-gateway_<ver>_windows_amd64.zip`)で
+> 配布しています。手動導入する場合は zip の SHA-256 を checksums.txt と
+> 突合のうえ展開してください。コード署名が無いため、初回実行時に
+> SmartScreen の警告(発行元実績のブロック)が出た場合は
+> 「詳細情報 → 実行」または `Unblock-File` で解除します。
 
 **Docker Compose** — `deploy/docker-compose.example.yaml` 参照(`--build` でこのリポジトリからビルド)。
 
