@@ -6,6 +6,7 @@
 //
 //	private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
 //	private-gateway genkey            (Virtual Key を1つ発行しハッシュを表示)
+//	private-gateway admin-token       (管理画面トークンを発行しハッシュを保存)
 //	private-gateway config validate -config <path>
 //	private-gateway version
 package main
@@ -47,6 +48,8 @@ func main() {
 		os.Exit(runServe(args))
 	case "genkey":
 		os.Exit(runGenkey())
+	case "admin-token":
+		os.Exit(runAdminToken())
 	case "register":
 		os.Exit(runRegister(args))
 	case "precheck":
@@ -77,6 +80,14 @@ func main() {
 	}
 }
 
+// dataDirDefault resolves the local state directory (LYKURO_DATA_DIR 優先)。
+func dataDirDefault() string {
+	if d := os.Getenv("LYKURO_DATA_DIR"); d != "" {
+		return d
+	}
+	return "/var/lib/lykuro/gateway"
+}
+
 // agentSettings builds AgentSettings from the environment (BD §23)。
 // LYKURO_CONTROL_PLANE_URL 未設定なら (nil 設定, false)。
 func agentSettings() (gwcore.AgentSettings, bool) {
@@ -84,10 +95,7 @@ func agentSettings() (gwcore.AgentSettings, bool) {
 	if url == "" {
 		return gwcore.AgentSettings{}, false
 	}
-	dataDir := os.Getenv("LYKURO_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/var/lib/lykuro/gateway"
-	}
+	dataDir := dataDirDefault()
 	st := gwcore.AgentSettings{
 		ControlPlaneURL:  url,
 		DataDir:          dataDir,
@@ -205,10 +213,7 @@ func runServe(args []string) int {
 
 	// Air-Gapped: 制御プレーン未構成でも config import 済みの世代(LKG)を反映
 	if _, ok := agentSettings(); !ok {
-		dataDir := os.Getenv("LYKURO_DATA_DIR")
-		if dataDir == "" {
-			dataDir = "/var/lib/lykuro/gateway"
-		}
+		dataDir := dataDirDefault()
 		if raw, rerr := os.ReadFile(filepath.Join(dataDir, "config-current.json")); rerr == nil {
 			if imported, perr := gwcore.ParseConfig(raw); perr == nil {
 				srv.SetConfig(imported)
@@ -266,6 +271,48 @@ func runServe(args []string) int {
 			}
 		}()
 		defer metricsSrv.Close()
+	}
+
+	// 管理画面(embedded admin UI): LYKURO_ADMIN_ENABLED=true でのみ別listenerで
+	// 公開。既定は loopback。admin-token 未発行なら起動しない(Fail Closed —
+	// 認証なしの管理面は絶対に開けない)。
+	if v := os.Getenv("LYKURO_ADMIN_ENABLED"); v == "true" || v == "1" {
+		listen := os.Getenv("LYKURO_ADMIN_LISTEN")
+		if listen == "" {
+			listen = "127.0.0.1:9465"
+		}
+		if host, _, herr := net.SplitHostPort(listen); herr == nil {
+			if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+				slog.Warn("admin listener is not loopback; ensure the address is management-network only",
+					"listen", listen)
+			}
+		}
+		hashPath := filepath.Join(dataDirDefault(), gwcore.AdminTokenHashFile)
+		hashRaw, err := os.ReadFile(hashPath)
+		if err != nil {
+			slog.Error("admin UI enabled but admin token is not provisioned; run 'private-gateway admin-token' first (admin UI stays off)",
+				"path", hashPath, "error", err)
+		} else {
+			_, connected := agentSettings()
+			adminSrv := &http.Server{
+				Addr: listen,
+				Handler: gwcore.NewAdminHandler(srv, gwcore.AdminOptions{
+					TokenHash:  strings.TrimSpace(string(hashRaw)),
+					ConfigPath: configPath(args),
+					AuditPath:  cfg.Audit.Path,
+					Connected:  connected,
+				}),
+				ReadHeaderTimeout: 10 * time.Second,
+			}
+			go func() {
+				slog.Info("admin UI enabled", "listen", listen)
+				if err := adminSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					// 管理面の失敗で推論を止めない(metrics と同じ方針)
+					slog.Error("admin server failed; inference continues", "error", err)
+				}
+			}()
+			defer adminSrv.Close()
+		}
 	}
 
 	go func() {
@@ -337,6 +384,30 @@ func runGenkey() int {
 	// 原文は一度きりの表示。設定へはハッシュのみ書く。
 	fmt.Printf("virtual key (share securely, shown once):\n  %s\n\n", plain)
 	fmt.Printf("gateway.yaml entry:\n  - id: vk-<name>\n    name: <purpose>\n    key_hash: %s\n", hash)
+	return 0
+}
+
+// runAdminToken issues the admin-UI credential(原文は一度きりの表示、
+// DataDir にはハッシュのみ保存。再実行で旧トークンは失効する)。
+func runAdminToken() int {
+	plain, hash, err := gwcore.GenerateAdminToken()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "admin token generation failed: %v\n", err)
+		return 1
+	}
+	dataDir := dataDirDefault()
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		fmt.Fprintf(os.Stderr, "data dir create failed: %v\n", err)
+		return 1
+	}
+	hashPath := filepath.Join(dataDir, gwcore.AdminTokenHashFile)
+	if err := os.WriteFile(hashPath, []byte(hash+"\n"), 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, "hash write failed: %v\n", err)
+		return 1
+	}
+	fmt.Printf("admin token (share securely, shown once):\n  %s\n\n", plain)
+	fmt.Printf("hash stored: %s\n", hashPath)
+	fmt.Println("enable the UI with LYKURO_ADMIN_ENABLED=true (listen: LYKURO_ADMIN_LISTEN, default 127.0.0.1:9465)")
 	return 0
 }
 

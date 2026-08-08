@@ -11,10 +11,10 @@
 
 ## 設計原則(変更前に必ず確認)
 
-1. **単一バイナリ・素のCLI** — サービス定義・インストーラ・ローカル管理UIを持たない。常駐化は利用者の流儀に委ねる
+1. **単一バイナリ・素のCLI** — サービス定義・インストーラを持たない。常駐化は利用者の流儀に委ねる。管理画面はバイナリ埋め込みの Web UI(`LYKURO_ADMIN_ENABLED`、既定 loopback・`admin-token` 認証必須・依存追加なし)としてのみ提供する
 2. **DBなし** — 永続化はローカルファイルのみ(資格情報・設定世代・監査JSONL・暗号化会話記憶)
-3. **Zero-Retention** — プロンプト/レスポンス本文をログ・監査・メトリクスに書かない(`content_logged: false` をテストで担保)
-4. **設定は署名配信が権威** — SaaS(app.lykuro.ai)が Ed25519 署名した世代のみ適用。ローカルでの設定改変経路を増やさない
+3. **Zero-Retention** — プロンプト/レスポンス本文をログ・監査・メトリクスに書かない(`content_logged: false` をテストで担保)。管理画面にも本文を読む・返す経路を作らない
+4. **設定の権威は接続形態で決まる** — Control Plane 接続時は SaaS(app.lykuro.ai)の Ed25519 署名世代が権威で、ローカル編集は次回配信で上書きされうる(管理画面はその旨を警告表示)。スタンドアロン時は管理画面/CLI からの Fail Closed 検証済み編集が正式経路(2026-08-09 の方針転換。旧「ローカル設定改変経路を増やさない」は撤回)
 5. **`sign`・`token`・`platform/contract` は安定公開API** — 外部利用者が version 指定で import する。正規形JSON・署名・ライセンス検証・トークン形式・契約バージョン(`gateway-platform-v1` 等)の破壊的変更は semver メジャーで行い、CHANGELOG に明記する
 6. **ワイヤ互換** — Agent API・署名済み config スキーマは稼働中の Control Plane と噛み合うプロトコル。変更は後方互換を基本とし、契約テスト(contract_test.go / engine_test.go)の更新を伴う設計判断として扱う
 
@@ -22,8 +22,8 @@
 
 | パス | 内容 |
 |------|------|
-| `cmd/private-gateway/` | CLIエントリポイント(serve/genkey/register/precheck/status/diagnose/config/upgrade/version) |
-| `gwcore/` | ゲートウェイ本体(認証・プロキシ・設定・メトリクス・SaaS Agent) |
+| `cmd/private-gateway/` | CLIエントリポイント(serve/genkey/admin-token/register/precheck/status/diagnose/config/upgrade/version) |
+| `gwcore/` | ゲートウェイ本体(認証・プロキシ・設定・メトリクス・SaaS Agent・管理画面 `admin.go` + `adminui/`) |
 | `platform/` | Platform統合(contract / enginecontract / orchestrator / memory / modelmanager / pool) |
 | `sign/` | Ed25519署名・ライセンス・正規形JSON(**本体と共有**) |
 | `token/` | トークン生成・ハッシュ(**本体と共有**) |

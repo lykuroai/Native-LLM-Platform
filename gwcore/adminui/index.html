@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lykuro Private Gateway 管理画面</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1a2233; --muted: #6b7486;
+    --border: #dde1e8; --accent: #2456c8; --accent-text: #ffffff;
+    --ok: #1a7f4b; --bad: #b3382f; --warn-bg: #fff7e0; --warn-border: #e0c268;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { background: var(--panel); border-bottom: 1px solid var(--border);
+           padding: 0.7rem 1.2rem; display: flex; align-items: baseline; gap: 1rem; }
+  header h1 { font-size: 1rem; margin: 0; }
+  header .meta { color: var(--muted); font-size: 0.8rem; }
+  main { max-width: 60rem; margin: 0 auto; padding: 1rem 1.2rem 3rem; }
+  nav { display: flex; gap: 0.3rem; margin: 0.8rem 0 1rem; flex-wrap: wrap; }
+  nav button { border: 1px solid var(--border); background: var(--panel); color: var(--text);
+               padding: 0.4rem 0.9rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  nav button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  section.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+                  padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  h2 { font-size: 0.95rem; margin: 0 0 0.7rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .pill { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.75rem; }
+  .pill.ok { background: #e2f4e9; color: var(--ok); }
+  .pill.bad { background: #fbe7e5; color: var(--bad); }
+  .kv { display: grid; grid-template-columns: 12rem 1fr; row-gap: 0.35rem; font-size: 0.85rem; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: ui-monospace, monospace; }
+  textarea, input, select { font-family: ui-monospace, monospace; font-size: 0.83rem;
+    border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 0.6rem; width: 100%;
+    background: var(--panel); color: var(--text); }
+  textarea { min-height: 24rem; resize: vertical; }
+  button.act { background: var(--accent); color: var(--accent-text); border: none;
+               padding: 0.45rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  button.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border);
+                 padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
+  .row { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.7rem; flex-wrap: wrap; }
+  .msg { font-size: 0.83rem; margin-top: 0.6rem; }
+  .msg.ok { color: var(--ok); } .msg.err { color: var(--bad); white-space: pre-wrap; }
+  .warnbar { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 8px;
+             padding: 0.6rem 0.9rem; font-size: 0.83rem; margin-bottom: 1rem; }
+  .keybox { background: #eef2fb; border: 1px dashed var(--accent); border-radius: 8px;
+            padding: 0.7rem 0.9rem; margin-top: 0.7rem; font-family: ui-monospace, monospace;
+            word-break: break-all; font-size: 0.85rem; }
+  pre.metrics { font-size: 0.75rem; overflow-x: auto; background: #10131a; color: #d7dce6;
+                padding: 0.9rem; border-radius: 8px; }
+  form.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+  form.grid label { font-size: 0.78rem; color: var(--muted); display: block; margin-bottom: 0.15rem; }
+  #login { max-width: 26rem; margin: 5rem auto; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lykuro Private Gateway</h1>
+  <span class="meta" id="hdr-meta"></span>
+  <span style="flex:1"></span>
+  <button class="ghost hidden" id="logout">ログアウト</button>
+</header>
+
+<main>
+  <section class="panel" id="login">
+    <h2>管理トークン</h2>
+    <p style="font-size:0.83rem;color:var(--muted)">
+      <code>private-gateway admin-token</code> で発行したトークン(<code>lkpadm_…</code>)を入力してください。
+    </p>
+    <input id="token-input" type="password" placeholder="lkpadm_..." autocomplete="off">
+    <div class="row"><button class="act" id="login-btn">接続</button></div>
+    <div class="msg err" id="login-msg"></div>
+  </section>
+
+  <div id="app" class="hidden">
+    <div class="warnbar hidden" id="connected-warn">
+      この Gateway は Control Plane に接続されています。ここでの設定変更は、次回の署名済み設定世代の配信で<strong>上書きされる</strong>可能性があります。恒久的な変更は app.lykuro.ai 側で行ってください。
+    </div>
+    <nav>
+      <button data-tab="overview" class="active">概要</button>
+      <button data-tab="keys">Virtual Keys</button>
+      <button data-tab="config">設定</button>
+      <button data-tab="audit">監査ログ</button>
+      <button data-tab="metrics">メトリクス</button>
+    </nav>
+
+    <section class="panel" id="tab-overview">
+      <h2>ゲートウェイ</h2>
+      <dl class="kv" id="ov-kv"></dl>
+      <h2 style="margin-top:1.2rem">モデル</h2>
+      <table><thead><tr><th>Logical</th><th>Runtime</th><th>Endpoint</th><th>Physical</th><th>状態</th></tr></thead>
+        <tbody id="ov-models"></tbody></table>
+      <div class="row"><button class="ghost" onclick="loadOverview()">再読込</button></div>
+    </section>
+
+    <section class="panel hidden" id="tab-keys">
+      <h2>Virtual Keys</h2>
+      <table><thead><tr><th>ID</th><th>名前</th><th>許可モデル</th><th>RPM</th><th>状態</th><th></th></tr></thead>
+        <tbody id="keys-body"></tbody></table>
+      <h2 style="margin-top:1.4rem">新規発行</h2>
+      <form class="grid" id="key-form" onsubmit="return false">
+        <div><label>ID(必須)</label><input id="nk-id" placeholder="vk-team-a"></div>
+        <div><label>名前</label><input id="nk-name" placeholder="用途"></div>
+        <div><label>許可モデル(カンマ区切り・空=全て)</label><input id="nk-models"></div>
+        <div><label>RPM 上限(0=無制限)</label><input id="nk-rpm" type="number" value="0"></div>
+      </form>
+      <div class="row"><button class="act" onclick="createKey()">発行</button></div>
+      <div id="new-key-box" class="keybox hidden"></div>
+      <div class="msg" id="keys-msg"></div>
+    </section>
+
+    <section class="panel hidden" id="tab-config">
+      <h2>gateway.yaml(検証 → 保存 → 即時反映)</h2>
+      <p style="font-size:0.8rem;color:var(--muted)">保存時にコメントは保持されません。検証エラー時は反映されません(Fail Closed)。</p>
+      <textarea id="cfg-text" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="act" onclick="applyConfig()">検証して反映</button>
+        <button class="ghost" onclick="loadConfig()">再読込</button>
+      </div>
+      <div class="msg" id="cfg-msg"></div>
+    </section>
+
+    <section class="panel hidden" id="tab-audit">
+      <h2>監査ログ(本文なし・末尾から)</h2>
+      <div class="row" style="margin:0 0 0.7rem">
+        <select id="audit-limit" style="width:8rem">
+          <option value="50">50件</option><option value="100" selected>100件</option>
+          <option value="500">500件</option>
+        </select>
+        <button class="ghost" onclick="loadAudit()">再読込</button>
+      </div>
+      <table><thead><tr><th>時刻</th><th>キー</th><th>Endpoint</th><th>モデル</th><th>Status</th><th>結果</th><th>ms</th></tr></thead>
+        <tbody id="audit-body"></tbody></table>
+      <div class="msg" id="audit-msg"></div>
+    </section>
+
+    <section class="panel hidden" id="tab-metrics">
+      <h2>メトリクス</h2>
+      <div class="row" style="margin:0 0 0.7rem"><button class="ghost" onclick="loadMetrics()">再読込</button></div>
+      <pre class="metrics" id="metrics-pre"></pre>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function getToken() { return sessionStorage.getItem("lykuro_admin_token") || ""; }
+
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers, { "Authorization": "Bearer " + getToken() });
+  const resp = await fetch(path, opts);
+  if (resp.status === 401) { showLogin("トークンが無効です"); throw new Error("unauthorized"); }
+  return resp;
+}
+async function apiJSON(path, opts) {
+  const resp = await api(path, opts);
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(body.error?.message || ("HTTP " + resp.status));
+  return body;
+}
+
+function showLogin(msg) {
+  sessionStorage.removeItem("lykuro_admin_token");
+  $("app").classList.add("hidden"); $("logout").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("login-msg").textContent = msg || "";
+}
+
+async function doLogin() {
+  const tok = $("token-input").value.trim();
+  if (!tok) return;
+  sessionStorage.setItem("lykuro_admin_token", tok);
+  try {
+    await apiJSON("/api/overview");
+  } catch (e) { return; }
+  $("login").classList.add("hidden");
+  $("app").classList.remove("hidden"); $("logout").classList.remove("hidden");
+  $("token-input").value = "";
+  loadOverview();
+}
+
+// ---- tabs ----
+document.querySelectorAll("nav button").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
+  document.querySelectorAll("main section.panel[id^=tab-]").forEach(s => s.classList.add("hidden"));
+  $("tab-" + btn.dataset.tab).classList.remove("hidden");
+  ({overview: loadOverview, keys: loadKeys, config: loadConfig, audit: loadAudit, metrics: loadMetrics})[btn.dataset.tab]();
+}));
+
+// ---- overview ----
+async function loadOverview() {
+  const ov = await apiJSON("/api/overview");
+  $("hdr-meta").textContent = `${ov.gateway_id} · v${ov.version}`;
+  $("connected-warn").classList.toggle("hidden", !ov.connected);
+  $("ov-kv").innerHTML = [
+    ["Gateway ID", ov.gateway_id], ["バージョン", ov.version], ["Listen", ov.listen],
+    ["Strict Local", ov.strict_local ? "有効" : "無効"],
+    ["Platform Route", ov.platform_enabled ? "有効" : "無効"],
+    ["Control Plane", ov.connected ? "接続構成あり" : "スタンドアロン"],
+    ["設定ファイル", ov.config_path], ["Virtual Key 数", ov.key_count],
+  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  $("ov-models").innerHTML = ov.models.map(m =>
+    `<tr><td>${esc(m.logical_name)}</td><td>${esc(m.runtime)}</td><td>${esc(m.endpoint)}</td>
+     <td>${esc(m.physical_model)}</td>
+     <td><span class="pill ${m.healthy ? "ok" : "bad"}">${m.healthy ? "稼働" : "停止"}</span></td></tr>`).join("")
+    || `<tr><td colspan="5" style="color:var(--muted)">モデル定義なし(platform 節参照)</td></tr>`;
+}
+
+// ---- keys ----
+async function loadKeys() {
+  const data = await apiJSON("/api/keys");
+  $("keys-body").innerHTML = data.keys.map(k =>
+    `<tr><td>${esc(k.id)}</td><td>${esc(k.name)}</td>
+     <td>${k.allowed_models?.length ? esc(k.allowed_models.join(", ")) : "(全て)"}</td>
+     <td>${k.rpm_limit || "∞"}</td>
+     <td><span class="pill ${k.disabled ? "bad" : "ok"}">${k.disabled ? "無効" : "有効"}</span></td>
+     <td style="white-space:nowrap">
+       <button class="ghost" onclick="toggleKey('${esc(k.id)}', ${!k.disabled})">${k.disabled ? "有効化" : "無効化"}</button>
+       <button class="ghost danger" onclick="deleteKey('${esc(k.id)}')">削除</button>
+     </td></tr>`).join("") || `<tr><td colspan="6" style="color:var(--muted)">キーなし</td></tr>`;
+}
+async function createKey() {
+  $("keys-msg").textContent = ""; $("new-key-box").classList.add("hidden");
+  try {
+    const models = $("nk-models").value.split(",").map(s => s.trim()).filter(Boolean);
+    const out = await apiJSON("/api/keys", { method: "POST", body: JSON.stringify({
+      id: $("nk-id").value.trim(), name: $("nk-name").value.trim(),
+      allowed_models: models, rpm_limit: parseInt($("nk-rpm").value, 10) || 0,
+    })});
+    $("new-key-box").innerHTML =
+      `新しいキー(この画面でのみ表示。安全に共有してください):<br><strong>${esc(out.key)}</strong>`;
+    $("new-key-box").classList.remove("hidden");
+    $("nk-id").value = ""; $("nk-name").value = ""; $("nk-models").value = "";
+    loadKeys();
+  } catch (e) { $("keys-msg").className = "msg err"; $("keys-msg").textContent = e.message; }
+}
+async function toggleKey(id, disabled) {
+  try {
+    await apiJSON("/api/keys/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify({ disabled }) });
+    loadKeys();
+  } catch (e) { $("keys-msg").className = "msg err"; $("keys-msg").textContent = e.message; }
+}
+async function deleteKey(id) {
+  if (!confirm(`キー ${id} を削除しますか?この操作は取り消せません。`)) return;
+  try {
+    await apiJSON("/api/keys/" + encodeURIComponent(id), { method: "DELETE" });
+    loadKeys();
+  } catch (e) { $("keys-msg").className = "msg err"; $("keys-msg").textContent = e.message; }
+}
+
+// ---- config ----
+async function loadConfig() {
+  $("cfg-msg").textContent = "";
+  const resp = await api("/api/config");
+  $("cfg-text").value = await resp.text();
+}
+async function applyConfig() {
+  $("cfg-msg").textContent = "";
+  try {
+    const out = await apiJSON("/api/config", { method: "PUT", body: $("cfg-text").value });
+    $("cfg-msg").className = "msg ok";
+    $("cfg-msg").textContent = `反映しました(モデル ${out.models} 件)`;
+    loadConfig();
+  } catch (e) { $("cfg-msg").className = "msg err"; $("cfg-msg").textContent = e.message; }
+}
+
+// ---- audit ----
+async function loadAudit() {
+  $("audit-msg").textContent = "";
+  const data = await apiJSON("/api/audit?limit=" + $("audit-limit").value);
+  if (!data.available) {
+    $("audit-msg").textContent = "監査ログは stdout 出力のためここでは閲覧できません(audit.path をファイルに設定してください)。";
+    $("audit-body").innerHTML = ""; return;
+  }
+  $("audit-body").innerHTML = data.records.slice().reverse().map(rec =>
+    `<tr><td>${esc(rec.ts)}</td><td>${esc(rec.virtual_key_id || "")}</td><td>${esc(rec.endpoint)}</td>
+     <td>${esc(rec.logical_model || "")}</td><td>${esc(rec.status)}</td><td>${esc(rec.result)}</td>
+     <td>${esc(rec.latency_ms ?? "")}</td></tr>`).join("")
+    || `<tr><td colspan="7" style="color:var(--muted)">記録なし</td></tr>`;
+}
+
+// ---- metrics ----
+async function loadMetrics() {
+  const resp = await api("/api/metrics");
+  $("metrics-pre").textContent = await resp.text();
+}
+
+// ---- boot ----
+$("login-btn").addEventListener("click", doLogin);
+$("token-input").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+$("logout").addEventListener("click", () => showLogin(""));
+if (getToken()) { $("token-input").value = getToken(); doLogin(); }
+</script>
+</body>
+</html>

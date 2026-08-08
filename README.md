@@ -61,6 +61,28 @@ app.lykuro.ai への登録・heartbeat・署名済み設定の受信は、以下
 | `LYKURO_HEARTBEAT_INTERVAL_SECONDS` | 任意(既定 60) |
 | `LYKURO_CONFIG_POLL_INTERVAL_SECONDS` | 任意(既定 300) |
 
+### 6. ローカル管理画面(任意)
+
+バイナリ埋め込みの Web 管理画面(概要・Virtual Key 管理・設定編集・監査ログ・
+メトリクス)を使う場合は、トークンを発行してから有効化します。
+
+```bash
+private-gateway admin-token        # トークン発行(一度きり表示。ハッシュのみ保存)
+LYKURO_ADMIN_ENABLED=true private-gateway serve -config gateway.yaml
+# → http://127.0.0.1:9465 を開き、発行したトークン(lkpadm_…)でログイン
+```
+
+| 環境変数 | 値 |
+|----------|-----|
+| `LYKURO_ADMIN_ENABLED` | `true` で有効化(既定は無効) |
+| `LYKURO_ADMIN_LISTEN` | 待受アドレス(既定 `127.0.0.1:9465`。loopback 外は警告) |
+
+- トークン未発行のまま有効化しても管理画面は起動しません(Fail Closed)
+- 設定編集は検証 → gateway.yaml への保存 → 即時反映。検証エラー時は反映されません
+- Control Plane 接続時は署名済み設定世代が優先され、ローカル編集は次回配信で
+  上書きされることがあります(画面上に警告を表示)
+- 管理操作(設定反映・キー発行/無効化/削除)は監査ログに記録されます(本文なし)
+
 **Docker Compose** — `deploy/docker-compose.example.yaml` 参照(`--build` でこのリポジトリからビルド)。
 
 **Kubernetes (Helm)** — `deploy/helm/lykuro-private-gateway/` 参照。
@@ -75,6 +97,7 @@ private-gateway precheck            # 前提条件チェック
 private-gateway status              # 稼働状態
 private-gateway diagnose            # 診断バンドル
 private-gateway genkey              # Virtual Key 発行(ハッシュ表示)
+private-gateway admin-token         # 管理画面トークン発行(再実行で旧トークン失効)
 private-gateway config validate -config <path>
 private-gateway upgrade -to <version> -file compose/docker-compose.yml   # compose 運用のみ
 private-gateway version

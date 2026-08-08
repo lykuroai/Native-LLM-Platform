@@ -30,7 +30,7 @@ type Config struct {
 	// Platform is the optional Native LLM Platform section
 	// (LYK-NLP-SD-001 v2.0)。nil または enabled:false で既存 route を
 	// 完全維持する(feature flag / rollback 経路、Phase 1)。
-	Platform *platformcfg.Config `yaml:"platform"`
+	Platform *platformcfg.Config `yaml:"platform,omitempty"`
 }
 
 // PlatformEnabled reports whether the platform route is active。
@@ -41,7 +41,7 @@ func (c *Config) PlatformEnabled() bool {
 type GatewaySection struct {
 	ID                 string   `yaml:"id"`
 	Listen             string   `yaml:"listen"`
-	StrictLocalMode    *bool    `yaml:"strict_local_mode"`
+	StrictLocalMode    *bool    `yaml:"strict_local_mode,omitempty"`
 	AllowedDataClasses []string `yaml:"allowed_data_classes"`
 	// MaxRequestBytes limits request bodies (既定 10MiB)。
 	MaxRequestBytes int64 `yaml:"max_request_bytes"`
@@ -62,7 +62,7 @@ type VirtualKeyDef struct {
 	Disabled      bool     `yaml:"disabled"`
 	// AllowTools controls function calling / tool use (Phase 7 統制)。
 	// 未指定 = 許可。false なら tools / tool_choice 付き要求を拒否。
-	AllowTools *bool `yaml:"allow_tools"`
+	AllowTools *bool `yaml:"allow_tools,omitempty"`
 }
 
 // ToolsAllowed reports whether the key may send tool definitions.
@@ -79,10 +79,10 @@ type ModelDef struct {
 	Endpoint      string `yaml:"endpoint"` // OpenAI互換APIのベースURL(パス /v1 を含めない)
 	PhysicalModel string `yaml:"physical_model"`
 	// Fallback candidates (順に試行)。
-	Fallback []ModelTarget `yaml:"fallback"`
+	Fallback []ModelTarget `yaml:"fallback,omitempty"`
 	// CloudFallback routes to the approved cloud when ALL local candidates
 	// fail (Phase 7 Hybrid、hybrid.enabled 必須)。
-	CloudFallback *CloudFallback `yaml:"cloud_fallback"`
+	CloudFallback *CloudFallback `yaml:"cloud_fallback,omitempty"`
 }
 
 // ModelTarget is one runtime deployment candidate.
