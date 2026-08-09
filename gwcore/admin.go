@@ -2,6 +2,7 @@ package gwcore
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
@@ -86,6 +87,8 @@ func NewAdminHandler(srv *Server, opts AdminOptions) http.Handler {
 	r.Post("/api/keys", a.withAuth(a.handleKeyCreate))
 	r.Patch("/api/keys/{id}", a.withAuth(a.handleKeyPatch))
 	r.Delete("/api/keys/{id}", a.withAuth(a.handleKeyDelete))
+	r.Get("/api/discover", a.withAuth(a.handleDiscover))
+	r.Post("/api/discover/adopt", a.withAuth(a.handleDiscoverAdopt))
 	r.Get("/api/audit", a.withAuth(a.handleAuditTail))
 	r.Get("/api/metrics", a.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		a.srv.Metrics().ServeHTTP(w, r)
@@ -339,6 +342,73 @@ func (a *adminAPI) mutateKey(w http.ResponseWriter, r *http.Request, id, auditRe
 	}
 	a.auditAdmin(r, auditResult)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "disabled": target.Disabled})
+}
+
+// handleDiscover scans for local runtimes(read-only。取込は adopt が担う)。
+// cidr 未指定はローカルホストの既知ポートのみ。CIDR は管理者の明示指定が
+// 必須で、上限 /22(広域スキャンをさせない)。
+func (a *adminAPI) handleDiscover(w http.ResponseWriter, r *http.Request) {
+	hosts, err := DiscoverHosts(r.URL.Query().Get("cidr"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_request", err.Error(), requestID(r))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	candidates := DiscoverRuntimes(ctx, hosts, ConfiguredEndpoints(a.srv.config()))
+	a.auditAdmin(r, "admin_discover_scanned")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"hosts_scanned": len(hosts),
+		"candidates":    candidates,
+	})
+}
+
+// handleDiscoverAdopt promotes one discovered candidate into the config
+// (承認フローの実体。ここを通らない限り発見された Runtime へは接続しない)。
+func (a *adminAPI) handleDiscoverAdopt(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		LogicalName   string `json:"logical_name"`
+		Runtime       string `json:"runtime"`
+		Endpoint      string `json:"endpoint"`
+		PhysicalModel string `json:"physical_model"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body", requestID(r))
+		return
+	}
+	if body.LogicalName == "" || body.Endpoint == "" || body.PhysicalModel == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_request",
+			"logical_name, endpoint and physical_model are required", requestID(r))
+		return
+	}
+	if body.Runtime == "" {
+		body.Runtime = "openai_compatible"
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	cfg, err := cloneConfig(a.srv.config())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error(), requestID(r))
+		return
+	}
+	cfg.Models = append(cfg.Models, ModelDef{
+		LogicalName:   body.LogicalName,
+		Runtime:       body.Runtime,
+		Endpoint:      strings.TrimRight(body.Endpoint, "/"),
+		PhysicalModel: body.PhysicalModel,
+	})
+	if err := cfg.Validate(); err != nil {
+		writeAPIError(w, http.StatusUnprocessableEntity, "invalid_request", err.Error(), requestID(r))
+		return
+	}
+	if err := a.persistAndApply(cfg); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error(), requestID(r))
+		return
+	}
+	a.auditAdmin(r, "admin_model_adopted")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"adopted": body.LogicalName, "endpoint": body.Endpoint,
+	})
 }
 
 // handleAuditTail returns the last N audit records(監査JSONLの読み戻し。

@@ -79,11 +79,12 @@
 
   <div id="app" class="hidden">
     <div class="warnbar hidden" id="connected-warn">
-      この Gateway は Control Plane に接続されています。ここでの設定変更は、次回の署名済み設定世代の配信で<strong>上書きされる</strong>可能性があります。恒久的な変更は app.lykuro.ai 側で行ってください。
+      この Gateway は Control Plane に接続されています。ここでの設定変更は、次回の署名済み設定世代の配信で<strong>上書きされる</strong>可能性があります。
     </div>
     <nav>
       <button data-tab="overview" class="active">概要</button>
       <button data-tab="keys">Virtual Keys</button>
+      <button data-tab="discover">Runtime 検出</button>
       <button data-tab="config">設定</button>
       <button data-tab="audit">監査ログ</button>
       <button data-tab="metrics">メトリクス</button>
@@ -112,6 +113,21 @@
       <div class="row"><button class="act" onclick="createKey()">発行</button></div>
       <div id="new-key-box" class="keybox hidden"></div>
       <div class="msg" id="keys-msg"></div>
+    </section>
+
+    <section class="panel hidden" id="tab-discover">
+      <h2>Runtime 検出</h2>
+      <p style="font-size:0.8rem;color:var(--muted)">
+        ローカルホスト(または指定した CIDR、最大 /22)の既知ポート(11434 / 8000 / 8080 / 3000 / 1234)を走査します。
+        発見された Runtime は<strong>取込操作をするまで接続されません</strong>。
+      </p>
+      <div class="row" style="margin:0 0 0.7rem">
+        <input id="disc-cidr" placeholder="CIDR(空=ローカルホストのみ。例 192.168.1.0/24)" style="max-width:24rem">
+        <button class="act" id="disc-btn" onclick="runDiscover()">走査</button>
+      </div>
+      <table><thead><tr><th>Endpoint</th><th>Runtime</th><th>検出モデル</th><th>状態</th><th>取込</th></tr></thead>
+        <tbody id="disc-body"></tbody></table>
+      <div class="msg" id="disc-msg"></div>
     </section>
 
     <section class="panel hidden" id="tab-config">
@@ -192,7 +208,7 @@ document.querySelectorAll("nav button").forEach(btn => btn.addEventListener("cli
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
   document.querySelectorAll("main section.panel[id^=tab-]").forEach(s => s.classList.add("hidden"));
   $("tab-" + btn.dataset.tab).classList.remove("hidden");
-  ({overview: loadOverview, keys: loadKeys, config: loadConfig, audit: loadAudit, metrics: loadMetrics})[btn.dataset.tab]();
+  ({overview: loadOverview, keys: loadKeys, discover: () => {}, config: loadConfig, audit: loadAudit, metrics: loadMetrics})[btn.dataset.tab]();
 }));
 
 // ---- overview ----
@@ -254,6 +270,45 @@ async function deleteKey(id) {
     await apiJSON("/api/keys/" + encodeURIComponent(id), { method: "DELETE" });
     loadKeys();
   } catch (e) { $("keys-msg").className = "msg err"; $("keys-msg").textContent = e.message; }
+}
+
+// ---- discover ----
+async function runDiscover() {
+  const btn = $("disc-btn");
+  btn.disabled = true; btn.textContent = "走査中…";
+  $("disc-msg").textContent = ""; $("disc-body").innerHTML = "";
+  try {
+    const cidr = $("disc-cidr").value.trim();
+    const data = await apiJSON("/api/discover" + (cidr ? "?cidr=" + encodeURIComponent(cidr) : ""));
+    window._discCands = data.candidates;
+    $("disc-body").innerHTML = data.candidates.map((c, i) =>
+      `<tr><td>${esc(c.endpoint)}</td><td>${esc(c.runtime)}</td>
+       <td>${c.models.length ? `<select id="disc-pm-${i}">` + c.models.map(m => `<option>${esc(m)}</option>`).join("") + `</select>`
+                             : `<input id="disc-pm-${i}" placeholder="physical model 名">`}</td>
+       <td><span class="pill ${c.configured ? "ok" : "bad"}">${c.configured ? "設定済" : "未登録"}</span></td>
+       <td style="white-space:nowrap"><input id="disc-ln-${i}" placeholder="logical 名" style="width:9rem">
+           <button class="ghost" onclick="adoptRuntime(${i})" ${c.configured ? "disabled" : ""}>取込</button></td></tr>`
+    ).join("") || `<tr><td colspan="5" style="color:var(--muted)">Runtime は見つかりませんでした(${data.hosts_scanned} ホスト走査)</td></tr>`;
+  } catch (e) { $("disc-msg").className = "msg err"; $("disc-msg").textContent = e.message; }
+  finally { btn.disabled = false; btn.textContent = "走査"; }
+}
+async function adoptRuntime(i) {
+  const c = window._discCands[i];
+  const logical = $("disc-ln-" + i).value.trim();
+  const physical = $("disc-pm-" + i).value.trim();
+  $("disc-msg").textContent = "";
+  if (!logical || !physical) {
+    $("disc-msg").className = "msg err";
+    $("disc-msg").textContent = "logical 名と physical model を指定してください"; return;
+  }
+  try {
+    const out = await apiJSON("/api/discover/adopt", { method: "POST", body: JSON.stringify({
+      logical_name: logical, runtime: c.runtime, endpoint: c.endpoint, physical_model: physical,
+    })});
+    $("disc-msg").className = "msg ok";
+    $("disc-msg").textContent = `${out.adopted} として取り込みました(設定へ保存・即時反映済み)`;
+    runDiscover();
+  } catch (e) { $("disc-msg").className = "msg err"; $("disc-msg").textContent = e.message; }
 }
 
 // ---- config ----

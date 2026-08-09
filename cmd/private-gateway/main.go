@@ -54,6 +54,8 @@ func main() {
 		os.Exit(runRegister(args))
 	case "precheck":
 		os.Exit(runPrecheck(args))
+	case "discover":
+		os.Exit(runDiscover(args))
 	case "status":
 		os.Exit(runStatus(args))
 	case "diagnose":
@@ -598,6 +600,67 @@ func runPrecheck(args []string) int {
 	}
 	if failed > 0 {
 		return 10 // ADD §11.6: 前提不足
+	}
+	return 0
+}
+
+// runDiscover scans for local LLM runtimes (read-only。ADD precheck と同系)。
+// 発見結果は表示のみで、取込は管理画面か gateway.yaml の手編集で行う。
+func runDiscover(args []string) int {
+	var cidr string
+	jsonOut := false
+	for i, a := range args {
+		if (a == "-cidr" || a == "--cidr") && i+1 < len(args) {
+			cidr = args[i+1]
+		}
+		if a == "--output=json" || a == "-output=json" {
+			jsonOut = true
+		}
+	}
+	hosts, err := gwcore.DiscoverHosts(cidr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
+		return 2
+	}
+	// 設定が読めれば登録済み endpoint を突合する(読めなくても走査は続行)
+	configured := map[string]bool{}
+	if cfg, cerr := gwcore.LoadConfig(configPath(args)); cerr == nil {
+		configured = gwcore.ConfiguredEndpoints(cfg)
+	} else {
+		fmt.Fprintf(os.Stderr, "note: config not loaded (%v); all candidates shown as unregistered\n", cerr)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	candidates := gwcore.DiscoverRuntimes(ctx, hosts, configured)
+
+	if jsonOut {
+		out, _ := json.MarshalIndent(map[string]any{
+			"hosts_scanned": len(hosts), "candidates": candidates}, "", "  ")
+		fmt.Println(string(out))
+		return 0
+	}
+	if len(candidates) == 0 {
+		fmt.Printf("no runtimes found (%d hosts scanned)\n", len(hosts))
+		return 0
+	}
+	for _, c := range candidates {
+		state := "new"
+		if c.Configured {
+			state = "configured"
+		}
+		fmt.Printf("[%s] %-28s %-18s models: %s\n", state, c.Endpoint, c.Runtime, strings.Join(c.Models, ", "))
+	}
+	fmt.Println("\ngateway.yaml snippet for new endpoints:")
+	for _, c := range candidates {
+		if c.Configured {
+			continue
+		}
+		physical := "<physical-model>"
+		if len(c.Models) > 0 {
+			physical = c.Models[0]
+		}
+		fmt.Printf("  - logical_name: <name>\n    runtime: %s\n    endpoint: %s\n    physical_model: %s\n",
+			c.Runtime, c.Endpoint, physical)
 	}
 	return 0
 }

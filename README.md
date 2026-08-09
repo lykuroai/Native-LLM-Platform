@@ -1,6 +1,6 @@
 # Lykuro Native LLM Platform
 
-Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環境(オンプレミス / VPC / 端末)で稼働し、ローカルLLM Runtime(vLLM / Ollama / TGI / OpenAI互換)を OpenAI 互換 API として提供するゲートウェイです。管理・ポリシー配信・ライセンスは Lykuro SaaS(app.lykuro.ai)の企業コンソールから行います。
+Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環境(オンプレミス / VPC / 端末)で稼働し、ローカルLLM Runtime(vLLM / Ollama / TGI / OpenAI互換)を OpenAI 互換 API として提供するゲートウェイです。単体で完結して動作し、管理はバイナリ埋め込みの管理画面と CLI で行います(Lykuro SaaS への接続は任意機能)。
 
 - 対応OS: **Linux / macOS / Windows**(amd64 / arm64、Windows は amd64)
 - 配布形態: ネイティブバイナリ([Releases](https://github.com/lykuroai/Native-LLM-Platform/releases))/ ソースビルド / Docker / Helm
@@ -14,13 +14,9 @@ Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環�
 
 ### 2. 設定
 
-`config/gateway.example.yaml` を `gateway.yaml` へコピーし、Gateway ID(企業コンソールで作成)と Runtime エンドポイントを設定します。
+`config/gateway.example.yaml` を `gateway.yaml` へコピーし、Gateway ID(任意の識別子)と Runtime エンドポイントを設定します。起動後は管理画面からも編集できます。
 
-### 3. 初回登録トークン
-
-app.lykuro.ai の Gateway 詳細画面で発行したトークン(有効期限24時間・1回限り)を `install-token.txt` へ保存します。shell 引数・環境変数へ直接書かないでください。
-
-### 4. 起動
+### 3. 起動
 
 単一の実行ファイルをそのまま起動するだけです(サービス登録は不要。常駐化したい場合は systemd / launchd / タスクスケジューラ等、各環境の流儀で自由にラップしてください)。
 
@@ -28,15 +24,13 @@ app.lykuro.ai の Gateway 詳細画面で発行したトークン(有効期限24
 
 ```bash
 chmod +x private-gateway_<ver>_<os>_<arch>
-LYKURO_INSTALL_TOKEN_FILE=./install-token.txt \
-  ./private-gateway_<ver>_<os>_<arch> serve -config gateway.yaml
+./private-gateway_<ver>_<os>_<arch> serve -config gateway.yaml
 ```
 
 **Windows (PowerShell)** — zip を展開して実行:
 
 ```powershell
 Expand-Archive private-gateway_<ver>_windows_amd64.zip .
-$env:LYKURO_INSTALL_TOKEN_FILE = ".\install-token.txt"
 .\private-gateway_<ver>_windows_amd64.exe serve -config gateway.yaml
 ```
 
@@ -45,23 +39,7 @@ $env:LYKURO_INSTALL_TOKEN_FILE = ".\install-token.txt"
 > 警告(発行元実績のブロック)が出た場合は「詳細情報 → 実行」または
 > `Unblock-File` で解除します。
 
-`LYKURO_INSTALL_TOKEN_FILE` は初回登録時のみ参照されます(登録後は削除可)。
-
-### 5. 管理コンソール(SaaS)接続
-
-app.lykuro.ai への登録・heartbeat・署名済み設定の受信は、以下の環境変数を
-設定した場合のみ有効になります(未設定ならスタンドアロン動作)。
-
-| 環境変数 | 値 |
-|----------|-----|
-| `LYKURO_CONTROL_PLANE_URL` | `https://api.lykuro.ai` |
-| `LYKURO_DATA_DIR` | Agent資格情報・設定世代の保存先(既定 `/var/lib/lykuro/gateway`) |
-| `LYKURO_SIGNING_PUB_FILE` | 配信設定の署名検証用 Ed25519 公開鍵(Lykuroから提供) |
-| `LYKURO_INSTALL_TOKEN_FILE` | 初回登録トークンのファイルパス |
-| `LYKURO_HEARTBEAT_INTERVAL_SECONDS` | 任意(既定 60) |
-| `LYKURO_CONFIG_POLL_INTERVAL_SECONDS` | 任意(既定 300) |
-
-### 6. ローカル管理画面(任意)
+### 4. ローカル管理画面(任意)
 
 バイナリ埋め込みの Web 管理画面(概要・Virtual Key 管理・設定編集・監査ログ・
 メトリクス)を使う場合は、トークンを発行してから有効化します。
@@ -81,19 +59,43 @@ LYKURO_ADMIN_ENABLED=true private-gateway serve -config gateway.yaml
 - 設定編集は検証 → gateway.yaml への保存 → 即時反映。検証エラー時は反映されません
 - Control Plane 接続時は署名済み設定世代が優先され、ローカル編集は次回配信で
   上書きされることがあります(画面上に警告を表示)
-- 管理操作(設定反映・キー発行/無効化/削除)は監査ログに記録されます(本文なし)
+- 管理操作(設定反映・キー発行/無効化/削除・Runtime 取込)は監査ログに記録されます(本文なし)
+- 「Runtime 検出」タブでローカルホスト(または明示指定した CIDR、最大 /22)の
+  既知ポートを走査し、発見した vLLM / Ollama / TGI 等を承認操作(取込)で設定へ
+  追加できます。**取込するまで発見済み Runtime へは一切接続しません**
+
+### 5. デプロイ(任意)
 
 **Docker Compose** — `deploy/docker-compose.example.yaml` 参照(`--build` でこのリポジトリからビルド)。
 
 **Kubernetes (Helm)** — `deploy/helm/lykuro-private-gateway/` 参照。
 
-起動後、app.lykuro.ai の Gateway 詳細で接続状態が online になることを確認してください。
+## 管理コンソール(SaaS)接続(任意機能)
+
+Gateway は単体で完結して動作します。複数拠点の一元管理・署名済み設定配信を
+使いたい場合のみ、以下の環境変数で Control Plane へ接続します(未設定なら
+スタンドアロン動作。接続時は配信された署名済み設定世代がローカル編集を
+上書きすることがあります)。
+
+| 環境変数 | 値 |
+|----------|-----|
+| `LYKURO_CONTROL_PLANE_URL` | Control Plane のベースURL |
+| `LYKURO_DATA_DIR` | Agent資格情報・設定世代の保存先(既定 `/var/lib/lykuro/gateway`) |
+| `LYKURO_SIGNING_PUB_FILE` | 配信設定の署名検証用 Ed25519 公開鍵 |
+| `LYKURO_INSTALL_TOKEN_FILE` | 初回登録トークンのファイルパス |
+| `LYKURO_HEARTBEAT_INTERVAL_SECONDS` | 任意(既定 60) |
+| `LYKURO_CONFIG_POLL_INTERVAL_SECONDS` | 任意(既定 300) |
+
+初回登録トークンは管理コンソールの Gateway 詳細画面で発行し(有効期限24時間・
+1回限り)、ファイルへ保存して `LYKURO_INSTALL_TOKEN_FILE` で渡します。shell
+引数・環境変数へ直接書かないでください。登録完了後は削除できます。
 
 ## CLI
 
 ```
 private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
 private-gateway precheck            # 前提条件チェック
+private-gateway discover [--cidr 192.168.1.0/24]   # Runtime 検出(read-only、最大 /22)
 private-gateway status              # 稼働状態
 private-gateway diagnose            # 診断バンドル
 private-gateway genkey              # Virtual Key 発行(ハッシュ表示)

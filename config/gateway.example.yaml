@@ -4,7 +4,7 @@
 # secret(トークン・鍵)はこのファイルへ書かず、secret file を使用します。
 schema_version: "1"
 gateway:
-  # 管理コンソール(app.lykuro.ai)で作成した Gateway の ID
+  # この Gateway の識別子(任意の文字列。SaaS 接続時は管理コンソールで作成した ID)
   id: "00000000-0000-0000-0000-000000000000"
   # 省略時 ":8443"
   listen: ":8443"
