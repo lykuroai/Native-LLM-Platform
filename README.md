@@ -14,7 +14,19 @@ Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環�
 
 ### 2. 設定
 
-`config/gateway.example.yaml` を `gateway.yaml` へコピーし、Gateway ID(任意の識別子)と Runtime エンドポイントを設定します。起動後は管理画面からも編集できます。
+稼働中の Runtime(vLLM / Ollama / TGI 等)があれば、設定を自動生成できます:
+
+```bash
+private-gateway init -config gateway.yaml   # Runtime 検出 → gateway.yaml 生成 + Virtual Key 発行
+```
+
+ローカルホストの既知ポートを走査し、見つかったモデルごとの定義と Virtual Key
+(原文は一度きり表示)を含む検証済みの設定を書き出します。`--cidr` で走査範囲の
+指定、`--force` で既存ファイルの上書きができます。
+
+手動で作る場合は `config/gateway.example.yaml` を `gateway.yaml` へコピーし、
+Gateway ID(任意の識別子)と Runtime エンドポイントを設定します。起動後は
+管理画面からも編集できます。
 
 ### 3. 起動
 
@@ -93,6 +105,7 @@ Gateway は単体で完結して動作します。複数拠点の一元管理・
 ## CLI
 
 ```
+private-gateway init [-config <path>] [--cidr <range>] [--force]   # 設定の自動生成
 private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
 private-gateway precheck            # 前提条件チェック
 private-gateway discover [--cidr 192.168.1.0/24]   # Runtime 検出(read-only、最大 /22)

@@ -4,6 +4,7 @@
 //
 // Usage:
 //
+//	private-gateway init   -config gateway.yaml   (Runtime検出から設定を自動生成)
 //	private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
 //	private-gateway genkey            (Virtual Key を1つ発行しハッシュを表示)
 //	private-gateway admin-token       (管理画面トークンを発行しハッシュを保存)
@@ -56,6 +57,8 @@ func main() {
 		os.Exit(runPrecheck(args))
 	case "discover":
 		os.Exit(runDiscover(args))
+	case "init":
+		os.Exit(runInit(args))
 	case "status":
 		os.Exit(runStatus(args))
 	case "diagnose":

@@ -22,7 +22,7 @@
 
 | パス | 内容 |
 |------|------|
-| `cmd/private-gateway/` | CLIエントリポイント(serve/genkey/admin-token/register/precheck/discover/status/diagnose/config/upgrade/version) |
+| `cmd/private-gateway/` | CLIエントリポイント(init/serve/genkey/admin-token/register/precheck/discover/status/diagnose/config/upgrade/version) |
 | `gwcore/` | ゲートウェイ本体(認証・プロキシ・設定・メトリクス・SaaS Agent・管理画面 `admin.go` + `adminui/`) |
 | `platform/` | Platform統合(contract / enginecontract / orchestrator / memory / modelmanager / pool) |
 | `sign/` | Ed25519署名・ライセンス・正規形JSON(**本体と共有**) |
