@@ -1,2 +1,4 @@
-# install.bat は cmd.exe 用に CRLF を保持する(raw ダウンロードでもそのまま届く)
-*.bat text eol=crlf
+# install.bat は cmd.exe 用に CRLF を保持する。text eol=crlf だとリポジトリ
+# 内部(= raw ダウンロードの配信元)が LF になるため、-text で無変換にして
+# CRLF のブロブをそのまま保存・配信する
+*.bat -text
