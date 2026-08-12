@@ -10,7 +10,19 @@ Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環�
 
 ### 1. バイナリの取得
 
-[Releases](https://github.com/lykuroai/Native-LLM-Platform/releases) から自OSのバイナリと `checksums.txt` を取得し、SHA-256 を突合してください。ソースからのビルドは `make build`(Go 1.26+)。
+**インストールスクリプト**(取得・checksum 検証・配置のみ。サービス登録・常駐化はしません):
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/install.sh | bash
+```
+
+```bat
+:: Windows(コマンドプロンプト)
+curl -fsSLO https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/install.bat && install.bat
+```
+
+手動の場合は [Releases](https://github.com/lykuroai/Native-LLM-Platform/releases) から自OSのバイナリと `checksums.txt` を取得し、SHA-256 を突合してください。ソースからのビルドは `make build`(Go 1.26+)。
 
 ### 2. 設定
 
