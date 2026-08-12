@@ -150,4 +150,9 @@ private-gateway version
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[PolyForm Noncommercial License 1.0.0](LICENSE)
+
+非商用利用(個人利用・研究・教育・評価・非営利組織での利用など)は無料です。
+商用利用には別途商用ライセンスが必要です。商用ライセンスについてはお問い合わせください。
+
+なお、v0.6.0 以前に Apache License 2.0 で公開されたバージョンは、引き続き同ライセンスの下で利用できます(ライセンス変更は遡及しません)。
