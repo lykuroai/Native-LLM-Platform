@@ -142,7 +142,9 @@ func DiscoverRuntimes(ctx context.Context, hosts []string, configured map[string
 // probeRuntime identifies a runtime at base。Ollama ネイティブ API を先に
 // 試し(機種確定+モデル一覧が取れる)、だめなら OpenAI 互換で判定する。
 // Lykuro Native Inference Engine は Ollama 互換 API を同ポートで提供するため、
-// /v1/models の owned_by=="lykuro" を識別子として lykuro_native に確定する。
+// /api/version の engine=="lykuro-native-engine" を第一識別子とし(モデル
+// 未ロードでも判別可)、engine フィールドを持たない旧版は /v1/models の
+// owned_by=="lykuro" で判定する。
 func probeRuntime(ctx context.Context, client *http.Client, base, guess string) (RuntimeCandidate, bool) {
 	if models, ok := probeJSON(ctx, client, base+"/api/tags", func(raw []byte) []string {
 		var v struct {
@@ -160,7 +162,9 @@ func probeRuntime(ctx context.Context, client *http.Client, base, guess string) 
 		return names
 	}); ok {
 		runtime := "ollama"
-		if _, lykuro, ok := probeOpenAIModels(ctx, client, base); ok && lykuro {
+		if probeEngineName(ctx, client, base) == "lykuro-native-engine" {
+			runtime = "lykuro_native"
+		} else if _, lykuro, ok := probeOpenAIModels(ctx, client, base); ok && lykuro {
 			runtime = "lykuro_native"
 		}
 		return RuntimeCandidate{Endpoint: base, Runtime: runtime, Models: models}, true
@@ -172,6 +176,34 @@ func probeRuntime(ctx context.Context, client *http.Client, base, guess string) 
 		return RuntimeCandidate{Endpoint: base, Runtime: guess, Models: models}, true
 	}
 	return RuntimeCandidate{}, false
+}
+
+// probeEngineName GETs /api/version and returns the "engine" field
+// (Ollama は version のみ返すため空文字。到達不能・非JSONも空文字)。
+func probeEngineName(ctx context.Context, client *http.Client, base string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/version", nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		Engine string `json:"engine"`
+	}
+	if json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	return v.Engine
 }
 
 // probeOpenAIModels GETs /v1/models。ownedByLykuro は 1 件以上のモデルが載り

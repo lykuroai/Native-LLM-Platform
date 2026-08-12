@@ -55,9 +55,27 @@ func TestProbeRuntime(t *testing.T) {
 	}))
 	defer openai.Close()
 
-	// Lykuro Native Inference Engine(Ollama 互換 + /v1/models owned_by=lykuro)
+	// Lykuro Native Inference Engine(/api/version の engine フィールドで識別)。
+	// モデル未ロードでも判別できることを兼ねて /v1/models は空にする。
 	native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/api/version":
+			w.Write([]byte(`{"version":"1.0.0","engine":"lykuro-native-engine"}`))
+		case "/api/tags":
+			w.Write([]byte(`{"models":[{"name":"qwen3-4b"}]}`))
+		case "/v1/models":
+			w.Write([]byte(`{"object":"list","data":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer native.Close()
+
+	// engine フィールドを持たない旧版 engine(owned_by=lykuro でフォールバック識別)
+	nativeOld := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/version":
+			w.Write([]byte(`{"version":"1.0.0"}`))
 		case "/api/tags":
 			w.Write([]byte(`{"models":[{"name":"qwen3-4b"}]}`))
 		case "/v1/models":
@@ -66,7 +84,7 @@ func TestProbeRuntime(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer native.Close()
+	defer nativeOld.Close()
 
 	// LLM Runtime ではない普通の HTTP サーバー(200 を返すが形が違う)
 	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -89,7 +107,12 @@ func TestProbeRuntime(t *testing.T) {
 
 	cand, ok = probeRuntime(ctx, client, native.URL, "ollama")
 	require.True(t, ok)
-	require.Equal(t, "lykuro_native", cand.Runtime) // owned_by=lykuro で Ollama と識別
+	require.Equal(t, "lykuro_native", cand.Runtime) // /api/version の engine で識別
+	require.Equal(t, []string{"qwen3-4b"}, cand.Models)
+
+	cand, ok = probeRuntime(ctx, client, nativeOld.URL, "ollama")
+	require.True(t, ok)
+	require.Equal(t, "lykuro_native", cand.Runtime) // 旧版は owned_by=lykuro で識別
 	require.Equal(t, []string{"qwen3-4b"}, cand.Models)
 
 	_, ok = probeRuntime(ctx, client, web.URL, "vllm")
