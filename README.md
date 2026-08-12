@@ -17,6 +17,11 @@ Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環�
 curl -fsSL https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/install.sh | bash
 ```
 
+```powershell
+# Windows(PowerShell)— curl.exe 明示(curl は Invoke-WebRequest の別名のため)
+curl.exe -fsSLO https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/install.bat; .\install.bat
+```
+
 ```bat
 :: Windows(コマンドプロンプト)
 curl -fsSLO https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/deploy/install.bat && install.bat
