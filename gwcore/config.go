@@ -173,10 +173,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("config: invalid allowed_data_classes entry %q", dc)
 		}
 	}
-	if len(c.Models) == 0 && !c.PlatformEnabled() {
-		// platform 有効時は logical model catalog が platform 節側にある
-		return fmt.Errorf("config: at least one model is required")
-	}
+	// models 0 件は有効(全リクエストが明示 404)。init 直後の空設定を許し、
+	// モデルは管理画面の discover/取込・手編集で後から足せる(2026-08-12 に
+	// 「1件以上必須」から緩和。platform 有効時の catalog は platform 節側)。
 	validTarget := func(where string, t ModelTarget) error {
 		if !validRuntimeAdapter(t.Runtime) {
 			return fmt.Errorf("config: %s.runtime %q is invalid", where, t.Runtime)

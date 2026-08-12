@@ -233,8 +233,9 @@ func TestAgentRejectsInvalidStagedConfig(t *testing.T) {
 	agent, srv, _ := newAgentFixture(t, cp)
 	require.NoError(t, agent.Register(context.Background()))
 
-	// 署名は正しいが staging 検証(スキーマ)で弾かれる設定
-	canonical, err := canonicalJSON([]byte(`{"schema_version": "1", "gateway": {"id": "gw-test"}}`))
+	// 署名は正しいが staging 検証(スキーマ)で弾かれる設定(不正 runtime 種別。
+	// models 0 件は 2026-08-12 から有効なので無効例には使えない)
+	canonical, err := canonicalJSON([]byte(`{"schema_version": "1", "gateway": {"id": "gw-test"}, "models": [{"logical_name": "x", "runtime": "magic", "endpoint": "http://127.0.0.1:1", "physical_model": "m"}]}`))
 	require.NoError(t, err)
 	cp.configVersion = 1
 	cp.configJSON = canonical

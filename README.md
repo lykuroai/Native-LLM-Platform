@@ -31,7 +31,7 @@ curl -fsSLO https://raw.githubusercontent.com/lykuroai/Native-LLM-Platform/main/
 
 ### 2. 設定
 
-稼働中の Runtime(Lykuro Native Inference Engine / vLLM / Ollama / TGI 等)があれば、設定を自動生成できます:
+稼働中の Runtime(Lykuro Native Inference Engine / vLLM / Ollama / TGI 等)を検出して設定を自動生成します。Runtime が見つからなくてもモデル 0 件の有効な設定を生成し、モデルは後から管理画面の取込・`init --force` の再実行・手編集で追加できます:
 
 ```bash
 private-gateway init -config gateway.yaml   # Runtime 検出 → gateway.yaml 生成 + Virtual Key 発行

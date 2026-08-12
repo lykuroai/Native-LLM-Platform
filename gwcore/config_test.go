@@ -76,14 +76,15 @@ func TestParseConfigRejects(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
-	t.Run("no models", func(t *testing.T) {
+	t.Run("no models is valid (empty catalog serves 404)", func(t *testing.T) {
 		yaml := `
 schema_version: "1"
 gateway:
   id: gw-x
 `
-		_, err := ParseConfig([]byte(yaml))
-		assert.ErrorContains(t, err, "at least one model")
+		cfg, err := ParseConfig([]byte(yaml))
+		assert.NoError(t, err)
+		assert.Empty(t, cfg.Models)
 	})
 }
 

@@ -17,8 +17,8 @@ import (
 
 // runInit generates gateway.yaml from discovered runtimes(discover の結果を
 // そのまま設定へ落とし込む導入コマンド)。既存ファイルは --force なしでは
-// 上書きしない。Runtime が見つからない場合はファイルを作らない(検証を
-// 通らない設定を書き出さない — Fail Closed)。
+// 上書きしない。Runtime が見つからなくてもモデル 0 件の有効な設定を書き出し、
+// モデルは後から管理画面の discover/取込か手編集で追加できる。
 func runInit(args []string) int {
 	var cidr string
 	force := false
@@ -45,11 +45,6 @@ func runInit(args []string) int {
 	defer cancel()
 	fmt.Printf("scanning %d host(s) for runtimes...\n", len(hosts))
 	candidates := gwcore.DiscoverRuntimes(ctx, hosts, map[string]bool{})
-	if len(candidates) == 0 {
-		fmt.Fprintln(os.Stderr, "no runtimes found — start your runtime (vLLM/Ollama/TGI) first,")
-		fmt.Fprintln(os.Stderr, "or copy config/gateway.example.yaml and edit it manually")
-		return 10
-	}
 
 	seg, err := token.RandomTokenSegment(8)
 	if err != nil {
@@ -58,8 +53,11 @@ func runInit(args []string) int {
 	}
 	cfg := buildInitConfig("gw-"+strings.ToLower(seg), candidates)
 	if len(cfg.Models) == 0 {
-		fmt.Fprintln(os.Stderr, "runtimes were found but none reported a loaded model; load a model first")
-		return 10
+		if len(candidates) == 0 {
+			fmt.Println("no runtimes found — generating a config with an empty model list")
+		} else {
+			fmt.Println("runtimes were found but none reported a loaded model — generating a config with an empty model list")
+		}
 	}
 
 	// すぐ使える設定にするため Virtual Key も同時発行(原文は一度きり表示)
@@ -101,6 +99,12 @@ func runInit(args []string) int {
 	fmt.Printf("\nvirtual key (share securely, shown once):\n  %s\n", plainKey)
 	fmt.Printf("\nnext steps:\n  private-gateway serve -config %s\n", path)
 	fmt.Printf("  curl http://127.0.0.1%s/v1/models -H \"Authorization: Bearer <key>\"\n", cfg.Gateway.Listen)
+	if len(cfg.Models) == 0 {
+		fmt.Println("\nadd models later:")
+		fmt.Println("  - start your runtime (native-engine/vLLM/Ollama/TGI) and re-run: private-gateway init --force")
+		fmt.Printf("  - or use the admin UI discover/adopt: LYKURO_ADMIN_ENABLED=1 private-gateway serve -config %s\n", path)
+		fmt.Printf("  - or edit %s by hand (see config/gateway.example.yaml)\n", path)
+	}
 	return 0
 }
 
