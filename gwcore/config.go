@@ -75,7 +75,7 @@ func (k *VirtualKeyDef) ToolsAllowed() bool {
 // §21: Runtime未ロード時に許可済みLocal候補へ切替)。
 type ModelDef struct {
 	LogicalName   string `yaml:"logical_name"`
-	Runtime       string `yaml:"runtime"`  // vllm | ollama | tgi | openai_compatible
+	Runtime       string `yaml:"runtime"`  // vllm | ollama | tgi | openai_compatible | lykuro_native
 	Endpoint      string `yaml:"endpoint"` // OpenAI互換APIのベースURL(パス /v1 を含めない)
 	PhysicalModel string `yaml:"physical_model"`
 	// Fallback candidates (順に試行)。
@@ -326,7 +326,7 @@ func (c *Config) CloudEligible(def *ModelDef, dataClass, routingMode string) boo
 // (対応 Runtime の種別。追加時は README も更新すること)。
 func validRuntimeAdapter(t string) bool {
 	switch t {
-	case "vllm", "ollama", "tgi", "openai_compatible":
+	case "vllm", "ollama", "tgi", "openai_compatible", "lykuro_native":
 		return true
 	}
 	return false

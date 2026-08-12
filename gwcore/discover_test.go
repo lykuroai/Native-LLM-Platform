@@ -55,6 +55,19 @@ func TestProbeRuntime(t *testing.T) {
 	}))
 	defer openai.Close()
 
+	// Lykuro Native Inference Engine(Ollama 互換 + /v1/models owned_by=lykuro)
+	native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/tags":
+			w.Write([]byte(`{"models":[{"name":"qwen3-4b"}]}`))
+		case "/v1/models":
+			w.Write([]byte(`{"object":"list","data":[{"id":"qwen3-4b","object":"model","owned_by":"lykuro"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer native.Close()
+
 	// LLM Runtime ではない普通の HTTP サーバー(200 を返すが形が違う)
 	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`<html>hello</html>`))
@@ -73,6 +86,11 @@ func TestProbeRuntime(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "vllm", cand.Runtime) // OpenAI 互換のみ → ポート由来の推定
 	require.Equal(t, []string{"meta-llama/Llama-3-8B"}, cand.Models)
+
+	cand, ok = probeRuntime(ctx, client, native.URL, "ollama")
+	require.True(t, ok)
+	require.Equal(t, "lykuro_native", cand.Runtime) // owned_by=lykuro で Ollama と識別
+	require.Equal(t, []string{"qwen3-4b"}, cand.Models)
 
 	_, ok = probeRuntime(ctx, client, web.URL, "vllm")
 	require.False(t, ok) // JSON 形不一致は Runtime と誤認しない

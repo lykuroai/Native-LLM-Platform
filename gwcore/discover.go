@@ -25,7 +25,7 @@ var discoverPorts = []struct {
 	Port    int
 	Runtime string // /v1/models のみ応答した場合の推定 runtime
 }{
-	{11434, "ollama"},
+	{11434, "ollama"}, // Lykuro Native Inference Engine も同ポート(probe で識別)
 	{8000, "vllm"},
 	{8080, "tgi"},
 	{3000, "tgi"},
@@ -141,6 +141,8 @@ func DiscoverRuntimes(ctx context.Context, hosts []string, configured map[string
 
 // probeRuntime identifies a runtime at base。Ollama ネイティブ API を先に
 // 試し(機種確定+モデル一覧が取れる)、だめなら OpenAI 互換で判定する。
+// Lykuro Native Inference Engine は Ollama 互換 API を同ポートで提供するため、
+// /v1/models の owned_by=="lykuro" を識別子として lykuro_native に確定する。
 func probeRuntime(ctx context.Context, client *http.Client, base, guess string) (RuntimeCandidate, bool) {
 	if models, ok := probeJSON(ctx, client, base+"/api/tags", func(raw []byte) []string {
 		var v struct {
@@ -157,26 +159,52 @@ func probeRuntime(ctx context.Context, client *http.Client, base, guess string) 
 		}
 		return names
 	}); ok {
-		return RuntimeCandidate{Endpoint: base, Runtime: "ollama", Models: models}, true
+		runtime := "ollama"
+		if _, lykuro, ok := probeOpenAIModels(ctx, client, base); ok && lykuro {
+			runtime = "lykuro_native"
+		}
+		return RuntimeCandidate{Endpoint: base, Runtime: runtime, Models: models}, true
 	}
-	if models, ok := probeJSON(ctx, client, base+"/v1/models", func(raw []byte) []string {
-		var v struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
+	if models, lykuro, ok := probeOpenAIModels(ctx, client, base); ok {
+		if lykuro {
+			guess = "lykuro_native"
 		}
-		if json.Unmarshal(raw, &v) != nil || v.Data == nil {
-			return nil
-		}
-		names := make([]string, 0, len(v.Data))
-		for _, m := range v.Data {
-			names = append(names, m.ID)
-		}
-		return names
-	}); ok {
 		return RuntimeCandidate{Endpoint: base, Runtime: guess, Models: models}, true
 	}
 	return RuntimeCandidate{}, false
+}
+
+// probeOpenAIModels GETs /v1/models。ownedByLykuro は 1 件以上のモデルが載り
+// かつ全モデルの owned_by が "lykuro" のとき true(Lykuro Native Inference
+// Engine の識別子。モデル未ロード時は判別不能なのでポート由来の推定に委ねる)。
+func probeOpenAIModels(ctx context.Context, client *http.Client, base string) (names []string, ownedByLykuro bool, ok bool) {
+	var v struct {
+		Data []struct {
+			ID      string `json:"id"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+	names, ok = probeJSON(ctx, client, base+"/v1/models", func(raw []byte) []string {
+		if json.Unmarshal(raw, &v) != nil || v.Data == nil {
+			return nil
+		}
+		out := make([]string, 0, len(v.Data))
+		for _, m := range v.Data {
+			out = append(out, m.ID)
+		}
+		return out
+	})
+	if !ok {
+		return nil, false, false
+	}
+	ownedByLykuro = len(v.Data) > 0
+	for _, m := range v.Data {
+		if m.OwnedBy != "lykuro" {
+			ownedByLykuro = false
+			break
+		}
+	}
+	return names, ownedByLykuro, true
 }
 
 // probeJSON GETs url and extracts model names。nil 抽出結果は不一致扱い

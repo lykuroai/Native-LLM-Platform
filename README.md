@@ -1,6 +1,6 @@
 # Lykuro Native LLM Platform
 
-Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環境(オンプレミス / VPC / 端末)で稼働し、ローカルLLM Runtime(vLLM / Ollama / TGI / OpenAI互換)を OpenAI 互換 API として提供するゲートウェイです。単体で完結して動作し、管理はバイナリ埋め込みの管理画面と CLI で行います(Lykuro SaaS への接続は任意機能)。
+Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環境(オンプレミス / VPC / 端末)で稼働し、ローカルLLM Runtime([Lykuro Native Inference Engine](https://github.com/lykuroai/engine) / vLLM / Ollama / TGI / OpenAI互換)を OpenAI 互換 API として提供するゲートウェイです。単体で完結して動作し、管理はバイナリ埋め込みの管理画面と CLI で行います(Lykuro SaaS への接続は任意機能)。
 
 - 対応OS: **Linux / macOS / Windows**(amd64 / arm64、Windows は amd64)
 - 配布形態: ネイティブバイナリ([Releases](https://github.com/lykuroai/Native-LLM-Platform/releases))/ ソースビルド / Docker / Helm
@@ -14,7 +14,7 @@ Customer-side Private LLM Gateway for [Lykuro](https://lykuro.ai) — 顧客環�
 
 ### 2. 設定
 
-稼働中の Runtime(vLLM / Ollama / TGI 等)があれば、設定を自動生成できます:
+稼働中の Runtime(Lykuro Native Inference Engine / vLLM / Ollama / TGI 等)があれば、設定を自動生成できます:
 
 ```bash
 private-gateway init -config gateway.yaml   # Runtime 検出 → gateway.yaml 生成 + Virtual Key 発行
@@ -73,7 +73,7 @@ LYKURO_ADMIN_ENABLED=true private-gateway serve -config gateway.yaml
   上書きされることがあります(画面上に警告を表示)
 - 管理操作(設定反映・キー発行/無効化/削除・Runtime 取込)は監査ログに記録されます(本文なし)
 - 「Runtime 検出」タブでローカルホスト(または明示指定した CIDR、最大 /22)の
-  既知ポートを走査し、発見した vLLM / Ollama / TGI 等を承認操作(取込)で設定へ
+  既知ポートを走査し、発見した Lykuro Native Inference Engine / vLLM / Ollama / TGI 等を承認操作(取込)で設定へ
   追加できます。**取込するまで発見済み Runtime へは一切接続しません**
 
 ### 5. デプロイ(任意)
