@@ -1,11 +1,15 @@
 @echo off
 setlocal
-rem Lykuro Private Gateway installer (Windows amd64)。
-rem GitHub Releases から zip を取得し checksums.txt で検証して
-rem %LOCALAPPDATA%\Lykuro\bin に配置するだけ — サービス登録・常駐化は
-rem 行わない(常駐化は利用者の流儀に委ねる)。
+rem Lykuro Private Gateway installer (Windows amd64).
+rem Downloads the release zip from GitHub Releases, verifies it against
+rem checksums.txt, and places private-gateway.exe under
+rem %LOCALAPPDATA%\Lykuro\bin. Nothing else: no service registration,
+rem no autostart (how to daemonize is left to the operator).
 rem
-rem Usage:  install.bat [vX.Y.Z]     (省略時は最新リリース)
+rem NOTE: keep this file ASCII-only. cmd.exe parses batch files in the
+rem system codepage (e.g. CP932), and UTF-8 multibyte text corrupts parsing.
+rem
+rem Usage:  install.bat [vX.Y.Z]     (default: latest release)
 
 set "REPO=lykuroai/Native-LLM-Platform"
 set "INSTALL_DIR=%LOCALAPPDATA%\Lykuro\bin"
@@ -47,7 +51,7 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 tar -xf "%TMPDIR%\%ASSET%" -C "%TMPDIR%" || goto :fail
 move /y "%TMPDIR%\private-gateway_%VERSION%_windows_amd64.exe" "%INSTALL_DIR%\private-gateway.exe" >nul || goto :fail
 
-rem ユーザー PATH へ追加(既に入っていれば何もしない)
+rem Add to the user PATH unless already present.
 echo %PATH% | findstr /i /c:"%INSTALL_DIR%" >nul || (
   powershell -NoProfile -Command "$p=[Environment]::GetEnvironmentVariable('Path','User'); if(-not (($p -split ';') -contains '%INSTALL_DIR%')){[Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';%INSTALL_DIR%'), 'User')}"
   echo added %INSTALL_DIR% to your user PATH ^(open a new terminal to pick it up^)

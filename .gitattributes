@@ -1,0 +1,2 @@
+# install.bat は cmd.exe 用に CRLF を保持する(raw ダウンロードでもそのまま届く)
+*.bat text eol=crlf
