@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.1 (2026-08-13)
+
+- docs(readme): 社内ローカルLLM を安全に外部公開する構成(Virtual Key 認証・レート制限・Zero-Retention・リバースプロキシでの TLS 終端)を追加
+
 ## v0.7.0 (2026-08-13)
 
 ### 破壊的変更

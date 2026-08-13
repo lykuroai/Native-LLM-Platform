@@ -99,6 +99,29 @@ LYKURO_ADMIN_ENABLED=true private-gateway serve -config gateway.yaml
 
 **Kubernetes (Helm)** — `deploy/helm/lykuro-private-gateway/` 参照。
 
+## 社内ローカルLLM の安全な外部公開
+
+社内 GPU サーバで動かしている Ollama / vLLM などの Runtime を、リモートワーク環境・他拠点・社外アプリケーションへ OpenAI 互換 API として公開する構成です。Runtime 本体は一切公開せず、Gateway だけを公開点にします。
+
+```
+[社外クライアント] ──HTTPS──> [リバースプロキシ(TLS終端)] ──> [private-gateway :8443] ──> [Ollama / vLLM(社内のみ)]
+```
+
+Gateway が公開経路で提供する保護:
+
+- **Virtual Key 認証** — すべての API リクエストに Bearer キー(`lkpgw_…`)を必須化。設定ファイルには SHA-256 ハッシュのみを保存し、キー単位で発行・失効できます(`genkey` / 管理画面)
+- **キー単位のレート制限** — Virtual Key ごとの RPM 上限で過剰利用・暴走クライアントを抑止
+- **Zero-Retention** — プロンプト/レスポンス本文はログ・監査・メトリクスのどこにも残りません
+- **監査ログ** — 誰のキーがいつどのモデルを呼んだか(本文なし)を JSONL で記録
+
+構成手順:
+
+1. Runtime(Ollama / vLLM 等)は loopback または社内ネットワークのみで待ち受けさせ、ファイアウォールで外部から直接到達できないことを確認します
+2. `gateway.yaml` の `listen` を必要な待受(例 `":8443"`)にし、公開するモデルだけを `models` に定義します
+3. 利用者・アプリごとに `private-gateway genkey` で Virtual Key を発行して配布します(原文キーは一度きり表示)
+4. Gateway は TLS 終端を内蔵しないため、外部公開時は必ずリバースプロキシ(nginx / Caddy 等)・ロードバランサ・トンネルで **HTTPS を終端**し、Gateway へ転送します。生の HTTP をインターネットへ直接公開しないでください
+5. 管理画面(`LYKURO_ADMIN_ENABLED`)は既定どおり loopback に限定したまま運用し、外部へは公開しません
+
 ## 管理コンソール(SaaS)接続(任意機能)
 
 Gateway は単体で完結して動作します。複数拠点の一元管理・署名済み設定配信を
