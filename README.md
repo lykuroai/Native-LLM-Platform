@@ -161,7 +161,7 @@ Gateway は単体で完結して動作します。複数拠点の一元管理・
 
 ```
 private-gateway init [-config <path>] [--cidr <range>] [--force]   # 設定の自動生成
-private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
+private-gateway serve [-config <path>]     # 既定はカレントディレクトリの gateway.yaml
 private-gateway precheck            # 前提条件チェック
 private-gateway discover [--cidr 192.168.1.0/24]   # Runtime 検出(read-only、最大 /22)
 private-gateway status              # 稼働状態

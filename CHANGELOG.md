@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.8.1 (2026-08-15)
+
+- fix(cli): 設定ファイルの既定パスを `/etc/lykuro/gateway/gateway.yaml` からカレントディレクトリの `gateway.yaml` に変更。root 権限のない環境で `-config` 未指定の `init` が `mkdir /etc/lykuro: permission denied` で失敗する問題を修正(優先順位は従来どおり `LYKURO_CONFIG_PATH` > `-config` > 既定)
+
 ## v0.8.0 (2026-08-15)
 
 - feat(cli): `admin-token -out <file>` を追加。管理画面トークンの原文を画面表示せず指定ファイルへ保存できる(0600・既存ファイルへは上書き拒否)

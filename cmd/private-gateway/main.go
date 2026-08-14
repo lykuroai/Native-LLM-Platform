@@ -5,7 +5,7 @@
 // Usage:
 //
 //	private-gateway init   -config gateway.yaml   (Runtime検出から設定を自動生成)
-//	private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
+//	private-gateway serve  -config gateway.yaml   (既定はカレントディレクトリの gateway.yaml)
 //	private-gateway genkey            (Virtual Key を1つ発行しハッシュを表示)
 //	private-gateway admin-token [-out <file>]  (管理画面トークンを発行しハッシュを保存。-out で原文を 0600 ファイルへ)
 //	private-gateway config validate -config <path>
@@ -119,8 +119,8 @@ func agentSettings() (gwcore.AgentSettings, bool) {
 }
 
 func configPath(args []string) string {
-	// LYKURO_CONFIG_PATH 環境変数 > -config フラグ > 既定
-	path := "/etc/lykuro/gateway/gateway.yaml"
+	// LYKURO_CONFIG_PATH 環境変数 > -config フラグ > 既定(カレントディレクトリ)
+	path := "gateway.yaml"
 	if env := os.Getenv("LYKURO_CONFIG_PATH"); env != "" {
 		path = env
 	}
