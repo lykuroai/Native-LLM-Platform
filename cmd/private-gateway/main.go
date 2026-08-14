@@ -7,7 +7,7 @@
 //	private-gateway init   -config gateway.yaml   (Runtime検出から設定を自動生成)
 //	private-gateway serve  -config /etc/lykuro/gateway/gateway.yaml
 //	private-gateway genkey            (Virtual Key を1つ発行しハッシュを表示)
-//	private-gateway admin-token       (管理画面トークンを発行しハッシュを保存)
+//	private-gateway admin-token [-out <file>]  (管理画面トークンを発行しハッシュを保存。-out で原文を 0600 ファイルへ)
 //	private-gateway config validate -config <path>
 //	private-gateway version
 package main
@@ -50,7 +50,7 @@ func main() {
 	case "genkey":
 		os.Exit(runGenkey())
 	case "admin-token":
-		os.Exit(runAdminToken())
+		os.Exit(runAdminToken(args))
 	case "register":
 		os.Exit(runRegister(args))
 	case "precheck":
@@ -85,12 +85,13 @@ func main() {
 	}
 }
 
-// dataDirDefault resolves the local state directory (LYKURO_DATA_DIR 優先)。
+// dataDirDefault resolves the local state directory (LYKURO_DATA_DIR 優先、
+// 既定はカレントディレクトリ)。
 func dataDirDefault() string {
 	if d := os.Getenv("LYKURO_DATA_DIR"); d != "" {
 		return d
 	}
-	return "/var/lib/lykuro/gateway"
+	return "."
 }
 
 // agentSettings builds AgentSettings from the environment (BD §23)。
@@ -394,7 +395,14 @@ func runGenkey() int {
 
 // runAdminToken issues the admin-UI credential(原文は一度きりの表示、
 // DataDir にはハッシュのみ保存。再実行で旧トークンは失効する)。
-func runAdminToken() int {
+// -out <path> 指定時のみ、原文トークンを指定ファイルへ 0600 で保存する。
+func runAdminToken(args []string) int {
+	var outPath string
+	for i, a := range args {
+		if (a == "-out" || a == "--out") && i+1 < len(args) {
+			outPath = args[i+1]
+		}
+	}
 	plain, hash, err := gwcore.GenerateAdminToken()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "admin token generation failed: %v\n", err)
@@ -410,10 +418,33 @@ func runAdminToken() int {
 		fmt.Fprintf(os.Stderr, "hash write failed: %v\n", err)
 		return 1
 	}
-	fmt.Printf("admin token (share securely, shown once):\n  %s\n\n", plain)
+	if outPath != "" {
+		if err := writeSecretFile(outPath, plain+"\n"); err != nil {
+			fmt.Fprintf(os.Stderr, "token file write failed: %v\n", err)
+			return 1
+		}
+		fmt.Printf("admin token written to: %s (mode 0600; keep it out of version control)\n\n", outPath)
+	} else {
+		fmt.Printf("admin token (share securely, shown once):\n  %s\n\n", plain)
+	}
 	fmt.Printf("hash stored: %s\n", hashPath)
 	fmt.Println("enable the UI with LYKURO_ADMIN_ENABLED=true (listen: LYKURO_ADMIN_LISTEN, default 127.0.0.1:9465)")
 	return 0
+}
+
+// writeSecretFile writes a credential to path with 0600, refusing to
+// overwrite an existing file(誤上書きで旧秘密を失わないため)。
+func writeSecretFile(path, content string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		f.Close()
+		os.Remove(path)
+		return err
+	}
+	return f.Close()
 }
 
 func runValidate(args []string) int {
@@ -455,10 +486,7 @@ func runConfigImport(args []string) int {
 		fmt.Fprintln(os.Stderr, "LYKURO_SIGNING_PUB_FILE is not set (配布物同梱の lykuro-signing.pub を指定)")
 		return 2
 	}
-	dataDir := os.Getenv("LYKURO_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/var/lib/lykuro/gateway"
-	}
+	dataDir := dataDirDefault()
 	pub, err := gwcore.LoadSigningPublicKey(pubPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "verification key load failed: %v\n", err)

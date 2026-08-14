@@ -75,6 +75,8 @@ Expand-Archive private-gateway_<ver>_windows_amd64.zip .
 
 ```bash
 private-gateway admin-token        # トークン発行(一度きり表示。ハッシュのみ保存)
+# 原文を画面表示せずファイルへ保存したい場合(0600・既存ファイルへは上書きしない):
+# private-gateway admin-token -out /path/to/admin-token.txt
 LYKURO_ADMIN_ENABLED=true private-gateway serve -config gateway.yaml
 # → http://127.0.0.1:9465 を開き、発行したトークン(lkpadm_…)でログイン
 ```
@@ -145,7 +147,7 @@ Gateway は単体で完結して動作します。複数拠点の一元管理・
 | 環境変数 | 値 |
 |----------|-----|
 | `LYKURO_CONTROL_PLANE_URL` | Control Plane のベースURL |
-| `LYKURO_DATA_DIR` | Agent資格情報・設定世代の保存先(既定 `/var/lib/lykuro/gateway`) |
+| `LYKURO_DATA_DIR` | Agent資格情報・設定世代の保存先(既定はカレントディレクトリ) |
 | `LYKURO_SIGNING_PUB_FILE` | 配信設定の署名検証用 Ed25519 公開鍵 |
 | `LYKURO_INSTALL_TOKEN_FILE` | 初回登録トークンのファイルパス |
 | `LYKURO_HEARTBEAT_INTERVAL_SECONDS` | 任意(既定 60) |
@@ -165,7 +167,7 @@ private-gateway discover [--cidr 192.168.1.0/24]   # Runtime 検出(read-only、
 private-gateway status              # 稼働状態
 private-gateway diagnose            # 診断バンドル
 private-gateway genkey              # Virtual Key 発行(ハッシュ表示)
-private-gateway admin-token         # 管理画面トークン発行(再実行で旧トークン失効)
+private-gateway admin-token         # 管理画面トークン発行(再実行で旧トークン失効。-out <file> で原文を 0600 保存)
 private-gateway config validate -config <path>
 private-gateway upgrade -to <version> -file compose/docker-compose.yml   # compose 運用のみ
 private-gateway version
