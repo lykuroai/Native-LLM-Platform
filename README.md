@@ -89,6 +89,19 @@ LYKURO_ADMIN_ENABLED=true private-gateway serve -config gateway.yaml
 - Control Plane 接続時は署名済み設定世代が優先され、ローカル編集は次回配信で
   上書きされることがあります(画面上に警告を表示)
 - 管理操作(設定反映・キー発行/無効化/削除・Runtime 取込)は監査ログに記録されます(本文なし)
+
+#### Virtual Key の保存仕様
+
+管理画面(または `genkey`)で発行した Virtual Key の**原文はどこにも保存されません**。
+発行時のレスポンスで一度だけ表示されるため、その場で控えてください(紛失時は
+削除して再発行します)。
+
+- 永続化されるのは SHA-256 ハッシュのみで、保存先は `gateway.yaml` の
+  `auth.virtual_keys[]`(`id` / `name` / `key_hash` / `allowed_models` / `rpm_limit`)です
+- 保存は一時ファイル書き込み → rename のアトミック置換(パーミッション `0600`)で行われ、
+  即時ホットリロードされます
+- 認証はリクエストの Bearer キーをハッシュ化して `key_hash` と定数時間比較する方式で、
+  DB や別の資格情報ファイルは存在しません(設計原則「DBなし」)
 - 「Runtime 検出」タブでローカルホスト(または明示指定した CIDR、最大 /22)の
   既知ポートを走査し、発見した Lykuro Native Inference Engine / vLLM / Ollama / TGI 等を承認操作(取込)で設定へ
   追加できます。**取込するまで発見済み Runtime へは一切接続しません**

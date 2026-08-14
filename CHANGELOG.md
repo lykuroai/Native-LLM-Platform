@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.2 (2026-08-15)
+
+- docs(readme): Virtual Key の保存仕様を明記(原文は一度きり表示・gateway.yaml に SHA-256 ハッシュのみ保存・アトミック置換 0600・DBなし)
+
 ## v0.7.1 (2026-08-13)
 
 - docs(readme): 社内ローカルLLM を安全に外部公開する構成(Virtual Key 認証・レート制限・Zero-Retention・リバースプロキシでの TLS 終端)を追加
