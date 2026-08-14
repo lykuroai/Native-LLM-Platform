@@ -13,6 +13,7 @@ services:
       - lykuro-gateway-state:/var/lib/lykuro/gateway
     environment:
       LYKURO_CONFIG_PATH: /etc/lykuro/gateway/gateway.yaml
+      LYKURO_DATA_DIR: /var/lib/lykuro/gateway
     # install token は環境変数ではなく secret file で渡す
     secrets:
       - lykuro_install_token

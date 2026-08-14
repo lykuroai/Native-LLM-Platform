@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.8.0 (2026-08-15)
+
+- feat(cli): `admin-token -out <file>` を追加。管理画面トークンの原文を画面表示せず指定ファイルへ保存できる(0600・既存ファイルへは上書き拒否)
+- **変更**: `LYKURO_DATA_DIR` 未設定時の既定を `/var/lib/lykuro/gateway` からカレントディレクトリに変更。従来の場所に状態がある既存環境は `LYKURO_DATA_DIR=/var/lib/lykuro/gateway` を明示してください(Helm は明示済みで影響なし。docker-compose 例には明示を追加)
+
 ## v0.7.2 (2026-08-15)
 
 - docs(readme): Virtual Key の保存仕様を明記(原文は一度きり表示・gateway.yaml に SHA-256 ハッシュのみ保存・アトミック置換 0600・DBなし)
