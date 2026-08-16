@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.9.0 (2026-08-16)
 
 - feat(workflow): マルチRuntime連鎖推論 / Workflow Orchestrator W1 を追加(LYK-NLP-MRCI-001 v1.1 を LYK-NLP-MRCI-002 で本リポジトリへ縮退適用)
   - Flow 定義(JSON)の Draft / Validation / 不変 Version 公開 / Alias / Suspend / Retire。永続化はローカルファイルのみ(`<workflows.data_dir>/flows/`、DBなし)
