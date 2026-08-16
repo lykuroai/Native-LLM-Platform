@@ -4,3 +4,6 @@ dist/
 install-token.txt
 gateway.yaml
 .DS_Store
+
+# 機密区分あり文書(社内・提案先限定)— 公開リポジトリへコミットしない
+docs/multi_runtime_chain_extension_spec_v1_1.md
