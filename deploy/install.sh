@@ -11,6 +11,11 @@
 #   LYKURO_PREFIX   配置先ディレクトリ(既定: /usr/local/bin)
 set -euo pipefail
 
+# スクリプト全体を関数に包む: `curl | bash` 実行時、bash は main 呼出し前に
+# 全文をパースして入力を消費するため、途中失敗で curl (23) Failed writing
+# body に化けず、本当のエラーがそのまま表示される。
+main() {
+
 REPO="lykuroai/Native-LLM-Platform"
 PREFIX="${LYKURO_PREFIX:-/usr/local/bin}"
 VERSION="${LYKURO_VERSION:-}"
@@ -27,9 +32,15 @@ case "$(uname -m)" in
 esac
 
 if [ -z "$VERSION" ]; then
-  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-    | grep -m1 '"tag_name"' | sed -E 's/.*"(v[^"]+)".*/\1/')"
-  [ -n "$VERSION" ] || { echo "failed to resolve latest release" >&2; exit 1; }
+  # GitHub API は未認証だと rate limit (403) になりやすいため使わない。
+  # /releases/latest のリダイレクト先 URL からタグを取り出す。
+  location="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPO}/releases/latest")" || location=""
+  VERSION="${location##*/}"
+  case "$VERSION" in
+    v*) ;;
+    *) echo "failed to resolve latest release (got: ${location:-no response}). Set LYKURO_VERSION=vX.Y.Z and retry." >&2; exit 1 ;;
+  esac
 fi
 
 ASSET="private-gateway_${VERSION}_${os}_${arch}"
@@ -71,3 +82,6 @@ EOF
 if ! command -v private-gateway >/dev/null 2>&1; then
   echo "NOTE: $PREFIX is not on your PATH — add it or run $DEST directly." >&2
 fi
+
+}
+main "$@"
