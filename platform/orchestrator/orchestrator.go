@@ -117,6 +117,29 @@ func (o *Orchestrator) prepare(req *contract.Request) (*prepared, *contract.Erro
 	if cerr != nil {
 		return nil, cerr
 	}
+	// 任意の pool 絞り込み(MRCI-002 §7.2: workflow step の runtime_target)
+	if req.PoolID != "" {
+		pe := o.cfg.FindPool(req.PoolID)
+		if pe == nil {
+			return nil, &contract.Error{Code: contract.ErrInvalidRequest,
+				Message: fmt.Sprintf("unknown pool %q", req.PoolID)}
+		}
+		member := map[string]bool{}
+		for _, id := range pe.DeploymentIDs {
+			member[id] = true
+		}
+		filtered := cands[:0]
+		for _, c := range cands {
+			if member[c.DeploymentID] {
+				filtered = append(filtered, c)
+			}
+		}
+		cands = filtered
+		if len(cands) == 0 {
+			return nil, &contract.Error{Code: contract.ErrModelNotAvailable,
+				Message: "no deployment of this model belongs to the requested pool", RetryAfter: 10}
+		}
+	}
 	// chat 以外(embeddings/rerank/responses)は connector 経路のみ
 	// (Engine MVP は chat+streaming のみ、§2.1)。
 	if req.Endpoint != "/v1/chat/completions" {

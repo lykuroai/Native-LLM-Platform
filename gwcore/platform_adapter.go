@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lykuroai/Native-LLM-Platform/platform/contract"
@@ -73,6 +74,12 @@ func (s *Server) platformRequest(w http.ResponseWriter, r *http.Request, key *Vi
 	streaming := false
 	if raw, ok := payload["stream"]; ok {
 		_ = json.Unmarshal(raw, &streaming)
+	}
+	// model=flow:{alias} は Workflow Orchestrator へ(MRCI-002 §5.1。
+	// 通常 model 名は platformcfg で flow: prefix を予約済み)
+	if strings.HasPrefix(logical, "flow:") && upstreamPath == "/v1/chat/completions" {
+		s.workflowChat(w, r, key, logical, payload, streaming, started)
+		return
 	}
 	delete(payload, "model") // logical は contract フィールドで渡す
 

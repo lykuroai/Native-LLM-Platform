@@ -29,16 +29,18 @@ import (
 	"github.com/lykuroai/Native-LLM-Platform/platform/orchestrator"
 	"github.com/lykuroai/Native-LLM-Platform/platform/platformcfg"
 	"github.com/lykuroai/Native-LLM-Platform/platform/pool"
+	"github.com/lykuroai/Native-LLM-Platform/platform/workflow"
 )
 
 // Platform is the assembled backend。
 type Platform struct {
-	cfg     *platformcfg.Config
-	manager *modelmanager.Manager
-	orch    *orchestrator.Orchestrator
-	pool    *pool.Pool
-	mem     *memory.Store
-	cancel  context.CancelFunc
+	cfg       *platformcfg.Config
+	manager   *modelmanager.Manager
+	orch      *orchestrator.Orchestrator
+	pool      *pool.Pool
+	mem       *memory.Store
+	workflows *workflow.Service // nil = workflows 無効
+	cancel    context.CancelFunc
 }
 
 var _ contract.Backend = (*Platform)(nil)
@@ -100,11 +102,37 @@ func New(cfg *platformcfg.Config, opts Options) (*Platform, error) {
 	if mem != nil {
 		go pf.retentionLoop(ctx)
 	}
+
+	// Workflow Orchestrator(MRCI-002、opt-in)。Step 実行は本 Platform の
+	// Execute/Cancel を再利用する。
+	if cfg.Workflows.Enabled {
+		ws, err := workflow.Open(cfg, catalogResolver{cfg}, pf)
+		if err != nil {
+			cancel()
+			return nil, fmt.Errorf("platform: workflow store: %w", err)
+		}
+		pf.workflows = ws
+	}
 	return pf, nil
 }
 
+// catalogResolver answers workflow validation questions from the config。
+type catalogResolver struct{ cfg *platformcfg.Config }
+
+func (r catalogResolver) ModelExists(name string) bool {
+	m := r.cfg.FindModel(name)
+	return m != nil && m.ApprovalStatus == platformcfg.ApprovalApproved
+}
+
+func (r catalogResolver) PoolExists(id string) bool { return r.cfg.FindPool(id) != nil }
+
 // Close stops background loops。
-func (p *Platform) Close() { p.cancel() }
+func (p *Platform) Close() {
+	if p.workflows != nil {
+		p.workflows.Close()
+	}
+	p.cancel()
+}
 
 // retentionLoop periodically enforces physical deletion (§11.4)。
 func (p *Platform) retentionLoop(ctx context.Context) {
@@ -173,3 +201,6 @@ func (p *Platform) Manager() *modelmanager.Manager { return p.manager }
 
 // Nodes returns the pool snapshot(本文なし)。
 func (p *Platform) Nodes() []pool.Node { return p.pool.Snapshot() }
+
+// Workflows exposes the Workflow Orchestrator(無効時 nil)。
+func (p *Platform) Workflows() *workflow.Service { return p.workflows }

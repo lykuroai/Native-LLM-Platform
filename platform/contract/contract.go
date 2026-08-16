@@ -44,6 +44,10 @@ type Request struct {
 	ActorScope      string // virtual_key_id
 	Policy          PolicyContext
 	LogicalModel    string
+	// PoolID optionally narrows candidate deployments to a named pool
+	// (platform.pools[]、LYK-NLP-MRCI-002 §7.2)。空 = 全 deployment。
+	// v0.9.0 での追加(後方互換: ゼロ値で従来動作)。
+	PoolID          string
 	Endpoint        string // 上流パス(/v1/chat/completions 等)
 	NormalizedInput map[string]json.RawMessage
 	Stream          bool

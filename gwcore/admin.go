@@ -93,6 +93,7 @@ func NewAdminHandler(srv *Server, opts AdminOptions) http.Handler {
 	r.Get("/api/metrics", a.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		a.srv.Metrics().ServeHTTP(w, r)
 	}))
+	a.registerWorkflowRoutes(r)
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusNotFound, "invalid_request", "unknown endpoint", requestID(r))

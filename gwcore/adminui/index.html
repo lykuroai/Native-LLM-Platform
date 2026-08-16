@@ -85,6 +85,8 @@
       <button data-tab="overview" class="active">概要</button>
       <button data-tab="keys">Virtual Keys</button>
       <button data-tab="discover">Runtime 検出</button>
+      <button data-tab="workflows">Workflows</button>
+      <button data-tab="runs">Workflow Runs</button>
       <button data-tab="config">設定</button>
       <button data-tab="audit">監査ログ</button>
       <button data-tab="metrics">メトリクス</button>
@@ -128,6 +130,36 @@
       <table><thead><tr><th>Endpoint</th><th>Runtime</th><th>検出モデル</th><th>状態</th><th>取込</th></tr></thead>
         <tbody id="disc-body"></tbody></table>
       <div class="msg" id="disc-msg"></div>
+    </section>
+
+    <section class="panel hidden" id="tab-workflows">
+      <h2>Inference Flows</h2>
+      <p style="font-size:0.8rem;color:var(--muted)">
+        公開済み Version は不変です。実行は Virtual Key の <code>allowed_models</code> に
+        <code>flow:{alias}</code> を許可し、<code>POST /v1/workflows/{alias}/runs</code> または
+        <code>model: "flow:{alias}"</code> で行います。
+      </p>
+      <table><thead><tr><th>名前 / Alias</th><th>状態</th><th>公開Ver</th><th>Draft Rev</th><th>更新</th><th></th></tr></thead>
+        <tbody id="wf-body"></tbody></table>
+      <h2 style="margin-top:1.4rem" id="wf-edit-title">新規 Flow(定義 JSON)</h2>
+      <textarea id="wf-def" spellcheck="false" placeholder='{"name":"...","alias":"...","execution_mode":"SEQUENTIAL", ...}'></textarea>
+      <div class="row">
+        <button class="act" id="wf-save-btn" onclick="saveFlow()">新規作成</button>
+        <button class="ghost" onclick="validateFlow()" id="wf-validate-btn" disabled>検証</button>
+        <button class="ghost" onclick="publishFlow()" id="wf-publish-btn" disabled>公開</button>
+        <button class="ghost" onclick="resetFlowEditor()">クリア</button>
+      </div>
+      <div class="msg" id="wf-msg"></div>
+    </section>
+
+    <section class="panel hidden" id="tab-runs">
+      <h2>Workflow Runs</h2>
+      <div class="row" style="margin:0 0 0.7rem"><button class="ghost" onclick="loadRuns()">再読込</button></div>
+      <table><thead><tr><th>Run</th><th>Flow</th><th>Ver</th><th>状態</th><th>キー</th><th>Token</th><th>開始</th><th></th></tr></thead>
+        <tbody id="runs-body"></tbody></table>
+      <h2 style="margin-top:1.4rem">Run 詳細(本文は保存されません)</h2>
+      <pre class="metrics" id="run-detail">Run を選択してください</pre>
+      <div class="msg" id="runs-msg"></div>
     </section>
 
     <section class="panel hidden" id="tab-config">
@@ -208,7 +240,7 @@ document.querySelectorAll("nav button").forEach(btn => btn.addEventListener("cli
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
   document.querySelectorAll("main section.panel[id^=tab-]").forEach(s => s.classList.add("hidden"));
   $("tab-" + btn.dataset.tab).classList.remove("hidden");
-  ({overview: loadOverview, keys: loadKeys, discover: () => {}, config: loadConfig, audit: loadAudit, metrics: loadMetrics})[btn.dataset.tab]();
+  ({overview: loadOverview, keys: loadKeys, discover: () => {}, workflows: loadFlows, runs: loadRuns, config: loadConfig, audit: loadAudit, metrics: loadMetrics})[btn.dataset.tab]();
 }));
 
 // ---- overview ----
@@ -309,6 +341,140 @@ async function adoptRuntime(i) {
     $("disc-msg").textContent = `${out.adopted} として取り込みました(設定へ保存・即時反映済み)`;
     runDiscover();
   } catch (e) { $("disc-msg").className = "msg err"; $("disc-msg").textContent = e.message; }
+}
+
+// ---- workflows ----
+let wfEdit = null; // {flowID, revision}
+async function loadFlows() {
+  $("wf-msg").textContent = "";
+  try {
+    const data = await apiJSON("/api/workflows");
+    $("wf-body").innerHTML = (data.flows || []).map(f =>
+      `<tr><td>${esc(f.name)}<br><code style="font-size:0.75rem">${esc(f.alias)}</code></td>
+       <td><span class="pill ${f.status === "published" ? "ok" : (f.status === "retired" ? "bad" : "")}">${esc(f.status)}</span></td>
+       <td>${f.latest_version || "-"}</td><td>${f.draft_revision}</td>
+       <td style="font-size:0.75rem">${esc((f.updated_at || "").replace("T", " ").slice(0, 19))}</td>
+       <td style="white-space:nowrap">
+         <button class="ghost" onclick="editFlow('${esc(f.flow_id)}')">編集</button>
+         ${f.status === "published" ? `<button class="ghost" onclick="setFlowStatus('${esc(f.flow_id)}','suspended')">停止</button>` : ""}
+         ${f.status === "suspended" ? `<button class="ghost" onclick="setFlowStatus('${esc(f.flow_id)}','published')">再開</button>` : ""}
+         ${f.status !== "retired" ? `<button class="ghost danger" onclick="retireFlow('${esc(f.flow_id)}')">廃止</button>` : ""}
+       </td></tr>`).join("")
+      || `<tr><td colspan="6" style="color:var(--muted)">Flow なし(workflows 無効の場合は platform.workflows.enabled を設定)</td></tr>`;
+  } catch (e) { $("wf-msg").className = "msg err"; $("wf-msg").textContent = e.message; }
+}
+function resetFlowEditor() {
+  wfEdit = null;
+  $("wf-def").value = "";
+  $("wf-edit-title").textContent = "新規 Flow(定義 JSON)";
+  $("wf-save-btn").textContent = "新規作成";
+  $("wf-validate-btn").disabled = true;
+  $("wf-publish-btn").disabled = true;
+  $("wf-msg").textContent = "";
+}
+async function editFlow(id) {
+  $("wf-msg").textContent = "";
+  try {
+    const data = await apiJSON("/api/workflows/" + encodeURIComponent(id));
+    wfEdit = { flowID: id, revision: data.draft.revision };
+    $("wf-def").value = JSON.stringify(data.draft.definition, null, 2);
+    $("wf-edit-title").textContent = `Draft 編集: ${data.meta.alias}(revision ${data.draft.revision})`;
+    $("wf-save-btn").textContent = "Draft 保存";
+    $("wf-validate-btn").disabled = false;
+    $("wf-publish-btn").disabled = false;
+  } catch (e) { $("wf-msg").className = "msg err"; $("wf-msg").textContent = e.message; }
+}
+async function saveFlow() {
+  $("wf-msg").textContent = "";
+  let def;
+  try { def = JSON.parse($("wf-def").value); }
+  catch (e) { $("wf-msg").className = "msg err"; $("wf-msg").textContent = "JSON 構文エラー: " + e.message; return; }
+  try {
+    if (wfEdit) {
+      const d = await apiJSON("/api/workflows/" + encodeURIComponent(wfEdit.flowID), {
+        method: "PATCH", body: JSON.stringify({ revision: wfEdit.revision, definition: def }) });
+      wfEdit.revision = d.revision;
+      $("wf-msg").className = "msg ok";
+      $("wf-msg").textContent = `保存しました(revision ${d.revision})`;
+      $("wf-edit-title").textContent = `Draft 編集(revision ${d.revision})`;
+    } else {
+      const meta = await apiJSON("/api/workflows", { method: "POST", body: JSON.stringify({ definition: def }) });
+      $("wf-msg").className = "msg ok";
+      $("wf-msg").textContent = `作成しました: ${meta.alias}`;
+      editFlow(meta.flow_id);
+    }
+    loadFlows();
+  } catch (e) {
+    // 409 = 他の編集と競合(ETag 相当)。上書きせず再読込を促す
+    $("wf-msg").className = "msg err";
+    $("wf-msg").textContent = e.message.includes("revision conflict")
+      ? "他の編集と競合しました。Flow を開き直して差分を確認してください(上書きしていません)。"
+      : e.message;
+  }
+}
+async function validateFlow() {
+  if (!wfEdit) return;
+  $("wf-msg").textContent = "";
+  try {
+    const out = await apiJSON("/api/workflows/" + encodeURIComponent(wfEdit.flowID) + "/validate", { method: "POST" });
+    if (out.valid) { $("wf-msg").className = "msg ok"; $("wf-msg").textContent = "検証 OK"; }
+    else { $("wf-msg").className = "msg err"; $("wf-msg").textContent = "検証エラー:\n" + out.errors.join("\n"); }
+  } catch (e) { $("wf-msg").className = "msg err"; $("wf-msg").textContent = e.message; }
+}
+async function publishFlow() {
+  if (!wfEdit) return;
+  if (!confirm("この Draft を公開しますか?公開後の Version は変更できません。")) return;
+  $("wf-msg").textContent = "";
+  try {
+    const out = await apiJSON("/api/workflows/" + encodeURIComponent(wfEdit.flowID) + "/publish", {
+      method: "POST", body: JSON.stringify({ revision: wfEdit.revision }) });
+    $("wf-msg").className = "msg ok";
+    $("wf-msg").textContent = `Version ${out.version} を公開しました(checksum ${out.checksum.slice(0, 12)}…)`;
+    loadFlows();
+  } catch (e) { $("wf-msg").className = "msg err"; $("wf-msg").textContent = e.message; }
+}
+async function setFlowStatus(id, status) {
+  try {
+    await apiJSON("/api/workflows/" + encodeURIComponent(id) + "/status", {
+      method: "POST", body: JSON.stringify({ status }) });
+    loadFlows();
+  } catch (e) { $("wf-msg").className = "msg err"; $("wf-msg").textContent = e.message; }
+}
+async function retireFlow(id) {
+  if (!confirm("この Flow を廃止しますか?新規実行は拒否され、元に戻せません。")) return;
+  setFlowStatus(id, "retired");
+}
+
+// ---- workflow runs ----
+async function loadRuns() {
+  $("runs-msg").textContent = "";
+  try {
+    const data = await apiJSON("/api/workflow-runs?limit=100");
+    $("runs-body").innerHTML = (data.runs || []).map(r =>
+      `<tr><td><code style="font-size:0.75rem">${esc(r.run_id)}</code></td>
+       <td>${esc(r.alias)}</td><td>${r.flow_version}</td>
+       <td><span class="pill ${r.status === "COMPLETED" ? "ok" : (r.status === "RUNNING" || r.status === "QUEUED" ? "" : "bad")}">${esc(r.status)}</span>${r.error_code ? `<br><code style="font-size:0.7rem">${esc(r.error_code)}</code>` : ""}</td>
+       <td>${esc(r.virtual_key_id || "")}</td>
+       <td>${(r.input_tokens || 0) + (r.output_tokens || 0)}</td>
+       <td style="font-size:0.75rem">${esc((r.created_at || "").replace("T", " ").slice(0, 19))}</td>
+       <td style="white-space:nowrap">
+         <button class="ghost" onclick="showRun('${esc(r.run_id)}')">詳細</button>
+         ${["QUEUED", "RUNNING", "CANCELLING"].includes(r.status) ? `<button class="ghost danger" onclick="cancelRun('${esc(r.run_id)}')">取消</button>` : ""}
+       </td></tr>`).join("")
+      || `<tr><td colspan="8" style="color:var(--muted)">Run なし</td></tr>`;
+  } catch (e) { $("runs-msg").className = "msg err"; $("runs-msg").textContent = e.message; }
+}
+async function showRun(id) {
+  try {
+    const data = await apiJSON("/api/workflow-runs/" + encodeURIComponent(id));
+    $("run-detail").textContent = JSON.stringify(data, null, 2);
+  } catch (e) { $("runs-msg").className = "msg err"; $("runs-msg").textContent = e.message; }
+}
+async function cancelRun(id) {
+  try {
+    await apiJSON("/api/workflow-runs/" + encodeURIComponent(id) + "/cancel", { method: "POST" });
+    loadRuns();
+  } catch (e) { $("runs-msg").className = "msg err"; $("runs-msg").textContent = e.message; }
 }
 
 // ---- config ----

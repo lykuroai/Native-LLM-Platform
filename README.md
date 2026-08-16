@@ -137,6 +137,29 @@ Gateway が公開経路で提供する保護:
 4. Gateway は TLS 終端を内蔵しないため、外部公開時は必ずリバースプロキシ(nginx / Caddy 等)・ロードバランサ・トンネルで **HTTPS を終端**し、Gateway へ転送します。生の HTTP をインターネットへ直接公開しないでください
 5. 管理画面(`LYKURO_ADMIN_ENABLED`)は既定どおり loopback に限定したまま運用し、外部へは公開しません
 
+## マルチRuntime連鎖推論(Workflow Orchestrator・任意機能)
+
+複数の Runtime / Model へ役割を割り当て、前段の出力を後段へ受け渡して 1 つの最終回答を返す Workflow 機能です(例: `質問1 → Runtime A → 回答A + 質問2 → Runtime B → 最終回答`)。`platform:` 節が有効な環境で opt-in します。
+
+```yaml
+platform:
+  enabled: true
+  # ...models / runtime_endpoints...
+  pools:                      # 任意: Deployment の論理集合(Step の実行先や Fallback 先)
+    - id: pool-review
+      deployment_ids: [dep-b]
+  workflows:
+    enabled: true
+    data_dir: workflows       # Flow 定義・Run メタデータの保存先(DBなし・ファイルのみ)
+```
+
+- **Flow 定義**は JSON(Step・依存関係・`{{inputs.x}}` / `{{steps.id.output}}` テンプレート・Retry / Fallback Policy)。管理画面の「Workflows」タブまたは `/api/workflows`(admin listener)で Draft 作成 → 検証 → 公開します。公開済み Version は不変で、実行時に Version と checksum が Run へ固定されます
+- **実行**は `POST /v1/workflows/{alias}/runs`(sync / stream、SSE は Last-Event-ID 再開・`Idempotency-Key` 対応)、または OpenAI 互換クライアントから `model: "flow:{alias}"`(必須 Input が 1 つの Flow のみ)。Virtual Key の `allowed_models` に `flow:{alias}` を記載して実行を許可します
+- **Zero-Retention は Workflow でも維持**: Step の入出力本文はメモリ内のみで、Run メタデータ・Event・監査ログに本文は書かれません
+- Runtime 選択・failover・sticky routing は既存の Model Manager / Scheduler をそのまま利用します。Step Timeout では二重推論防止のため再試行しません。未承認の実行先への自動 Fallback は行いません(Fail Closed)
+
+詳細仕様は `docs/multi_runtime_chain_w0_mapping_v1_0.md`(LYK-NLP-MRCI-002)を参照してください。
+
 ## 管理コンソール(SaaS)接続(任意機能)
 
 Gateway は単体で完結して動作します。複数拠点の一元管理・署名済み設定配信を

@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/lykuroai/Native-LLM-Platform/platform/contract"
+	"github.com/lykuroai/Native-LLM-Platform/platform/workflow"
 )
 
 // Version is the gateway software version (パッケージの software_version と対応)。
@@ -31,6 +32,9 @@ type Server struct {
 	// Phase 1 Adapter)。nil または config の platform.enabled=false なら
 	// 既存 proxyRequest 経路を維持する(rollback 経路)。
 	platform contract.Backend
+	// workflows is the Workflow Orchestrator(MRCI-002)。nil = 無効。
+	// platform backend と同じライフサイクルで main が入れ替える。
+	workflows *workflow.Service
 	// onConfigApplied is invoked after SetConfig(platform backend の再構築
 	// 用 hook。main が設定する)。
 	onConfigApplied func(*Config)
@@ -144,6 +148,14 @@ func (s *Server) Router() http.Handler {
 	r.Post("/v1/rerank", s.withAuth(func(w http.ResponseWriter, r *http.Request, k *VirtualKeyDef) {
 		s.routeInference(w, r, k, "/v1/rerank")
 	}))
+
+	// Workflow Orchestrator(MRCI-002 §5.1。platform.workflows.enabled 時のみ
+	// 応答 — 無効時は handler 側で 404)
+	r.Post("/v1/workflows/{alias}/runs", s.withAuth(s.handleWorkflowStart))
+	r.Get("/v1/workflow-runs/{run_id}", s.withAuth(s.handleWorkflowRunGet))
+	r.Get("/v1/workflow-runs/{run_id}/steps", s.withAuth(s.handleWorkflowRunSteps))
+	r.Get("/v1/workflow-runs/{run_id}/events", s.withAuth(s.handleWorkflowRunEvents))
+	r.Post("/v1/workflow-runs/{run_id}/cancel", s.withAuth(s.handleWorkflowRunCancel))
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusNotFound, "invalid_request", "unknown endpoint", requestID(r))

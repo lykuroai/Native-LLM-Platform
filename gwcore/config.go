@@ -269,6 +269,17 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("config: virtual_keys[%d].key_hash must be sha256 hex", i)
 		}
 		for _, am := range k.AllowedModels {
+			// flow:{alias} は Workflow(実行時データ)への許可 — Flow は
+			// config 外で管理されるため、ここでは形式だけ検証する
+			if strings.HasPrefix(am, "flow:") {
+				if !c.PlatformEnabled() || !c.Platform.Workflows.Enabled {
+					return fmt.Errorf("config: virtual_keys[%d] allows %q but platform.workflows is not enabled", i, am)
+				}
+				if len(am) == len("flow:") {
+					return fmt.Errorf("config: virtual_keys[%d] allows invalid flow reference %q", i, am)
+				}
+				continue
+			}
 			if !seen[am] {
 				return fmt.Errorf("config: virtual_keys[%d] allows unknown model %q", i, am)
 			}

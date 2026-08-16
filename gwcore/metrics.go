@@ -58,6 +58,10 @@ type Metrics struct {
 	activeStreams int64
 	configVersion int64
 	heartbeats    map[bool]int64
+	// Workflow Orchestrator(MRCI-002 §16.2 縮退版。label は status/低
+	// cardinality のみ — run_id 等は入れない)
+	workflowRuns     map[string]int64 // 終了 status
+	workflowFallback int64
 }
 
 func newMetrics() *Metrics {
@@ -69,6 +73,20 @@ func newMetrics() *Metrics {
 		outputTokens: map[string]int64{},
 		modelErrors:  map[string]int64{},
 		heartbeats:   map[bool]int64{},
+		workflowRuns: map[string]int64{},
+	}
+}
+
+// recordWorkflowRun counts one finished workflow run。
+func (m *Metrics) recordWorkflowRun(status string, fallbackUsed bool) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.workflowRuns[status]++
+	if fallbackUsed {
+		m.workflowFallback++
 	}
 }
 
@@ -205,6 +223,12 @@ func (m *Metrics) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "# HELP lykuro_pgw_config_version Applied signed-config generation\n# TYPE lykuro_pgw_config_version gauge\nlykuro_pgw_config_version %d\n", m.configVersion)
 	fmt.Fprintf(&b, "# HELP lykuro_pgw_heartbeat_total Control-plane heartbeats by result\n# TYPE lykuro_pgw_heartbeat_total counter\nlykuro_pgw_heartbeat_total{result=\"success\"} %d\nlykuro_pgw_heartbeat_total{result=\"failure\"} %d\n",
 		m.heartbeats[true], m.heartbeats[false])
+
+	b.WriteString("# HELP lykuro_pgw_workflow_runs_total Finished workflow runs by status\n# TYPE lykuro_pgw_workflow_runs_total counter\n")
+	for _, k := range sortedKeys(m.workflowRuns) {
+		fmt.Fprintf(&b, "lykuro_pgw_workflow_runs_total{status=%q} %d\n", k, m.workflowRuns[k])
+	}
+	fmt.Fprintf(&b, "# HELP lykuro_pgw_workflow_fallback_total Workflow runs that used an approved fallback pool\n# TYPE lykuro_pgw_workflow_fallback_total counter\nlykuro_pgw_workflow_fallback_total %d\n", m.workflowFallback)
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(b.String()))

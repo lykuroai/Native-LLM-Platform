@@ -43,6 +43,8 @@ type Config struct {
 	Orchestrator     Orchestrator      `yaml:"orchestrator"`
 	Memory           Memory            `yaml:"memory"`
 	Pool             Pool              `yaml:"pool"`
+	Pools            []PoolEntry       `yaml:"pools"`
+	Workflows        Workflows         `yaml:"workflows"`
 }
 
 // ModelEntry is one Logical Model in the distributed catalog (§6.3)。
@@ -129,6 +131,37 @@ type Pool struct {
 	HealthIntervalSeconds int `yaml:"health_interval_seconds"`
 }
 
+// PoolEntry is a named logical set of deployments(LYK-NLP-MRCI-002 §7.3)。
+// Workflow の runtime_target.pool_id / fallback_policy.allowed_pool_ids が
+// 参照する。deployment ID は catalog 全体で一意であること。
+type PoolEntry struct {
+	ID            string   `yaml:"id"`
+	Description   string   `yaml:"description"`
+	DeploymentIDs []string `yaml:"deployment_ids"`
+}
+
+// Workflows は Workflow Orchestrator(LYK-NLP-MRCI-002)の opt-in 設定。
+type Workflows struct {
+	Enabled bool `yaml:"enabled"`
+	// DataDir は Flow 定義・Run メタデータの保存先。既定 "workflows"。
+	// 本文(Step Input/Output)はここへ保存しない(Zero-Retention)。
+	DataDir string `yaml:"data_dir"`
+	// OpenAIAliasEnabled は /v1/chat/completions の model=flow:{alias} 経路。
+	// nil = 既定 true。
+	OpenAIAliasEnabled *bool `yaml:"openai_alias_enabled"`
+	MaxFlows           int   `yaml:"max_flows"`            // 既定 100
+	RunRetentionDays   int   `yaml:"run_retention_days"`   // 既定 90
+	EventRetentionDays int   `yaml:"event_retention_days"` // 既定 30
+	// ContentRetentionDays は W1 では 0(本文非保存)のみ許可。
+	ContentRetentionDays int `yaml:"content_retention_days"`
+	MaxConcurrentRuns    int `yaml:"max_concurrent_runs"` // 既定 8
+}
+
+// AliasEnabled reports whether the flow:{alias} chat route is enabled。
+func (w *Workflows) AliasEnabled() bool {
+	return w.OpenAIAliasEnabled == nil || *w.OpenAIAliasEnabled
+}
+
 // Validate は Fail Closed 前提で platform 設定を検査する。
 func (c *Config) Validate() error {
 	if !c.Enabled {
@@ -172,12 +205,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("platform: at least one model is required when enabled")
 	}
 	names := map[string]bool{}
+	allDeps := map[string]bool{}
 	for i, m := range c.Models {
 		if m.LogicalName == "" {
 			return fmt.Errorf("platform: models[%d].logical_name is required", i)
 		}
 		if names[m.LogicalName] {
 			return fmt.Errorf("platform: duplicate logical_name %q", m.LogicalName)
+		}
+		if len(m.LogicalName) >= 5 && m.LogicalName[:5] == "flow:" {
+			// flow: prefix は Workflow alias 経路の予約(MRCI-002 §5.1)
+			return fmt.Errorf("platform: models[%d].logical_name %q: prefix \"flow:\" is reserved for workflows", i, m.LogicalName)
 		}
 		names[m.LogicalName] = true
 		switch m.ApprovalStatus {
@@ -203,6 +241,12 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("platform: models[%d] duplicate deployment id %q", i, d.ID)
 			}
 			depIDs[d.ID] = true
+			if allDeps[d.ID] {
+				// pool registry は deployment ID を node key に使うため
+				// catalog 全体で一意(従来から暗黙の前提、明示化)
+				return fmt.Errorf("platform: deployment id %q is not unique across models", d.ID)
+			}
+			allDeps[d.ID] = true
 			switch d.BackendType {
 			case BackendExternalConnector:
 				if !rteIDs[d.RuntimeEndpointID] {
@@ -266,6 +310,55 @@ func (c *Config) Validate() error {
 	}
 	if c.Pool.HealthIntervalSeconds <= 0 {
 		c.Pool.HealthIntervalSeconds = 30
+	}
+	poolIDs := map[string]bool{}
+	for i, p := range c.Pools {
+		if p.ID == "" {
+			return fmt.Errorf("platform: pools[%d].id is required", i)
+		}
+		if poolIDs[p.ID] {
+			return fmt.Errorf("platform: duplicate pool id %q", p.ID)
+		}
+		poolIDs[p.ID] = true
+		if len(p.DeploymentIDs) == 0 {
+			return fmt.Errorf("platform: pools[%d] requires at least one deployment_id", i)
+		}
+		for _, d := range p.DeploymentIDs {
+			if !allDeps[d] {
+				return fmt.Errorf("platform: pools[%d] references unknown deployment %q", i, d)
+			}
+		}
+	}
+	if c.Workflows.Enabled {
+		if c.Workflows.DataDir == "" {
+			c.Workflows.DataDir = "workflows"
+		}
+		if c.Workflows.MaxFlows <= 0 {
+			c.Workflows.MaxFlows = 100
+		}
+		if c.Workflows.RunRetentionDays <= 0 {
+			c.Workflows.RunRetentionDays = 90
+		}
+		if c.Workflows.EventRetentionDays <= 0 {
+			c.Workflows.EventRetentionDays = 30
+		}
+		if c.Workflows.MaxConcurrentRuns <= 0 {
+			c.Workflows.MaxConcurrentRuns = 8
+		}
+		if c.Workflows.ContentRetentionDays != 0 {
+			// W1: 本文保存は未実装 — 受理して無視しない(Fail Closed)
+			return fmt.Errorf("platform: workflows.content_retention_days must be 0 (content persistence is not supported yet)")
+		}
+	}
+	return nil
+}
+
+// FindPool resolves a named deployment pool by ID。
+func (c *Config) FindPool(id string) *PoolEntry {
+	for i := range c.Pools {
+		if c.Pools[i].ID == id {
+			return &c.Pools[i]
+		}
 	}
 	return nil
 }

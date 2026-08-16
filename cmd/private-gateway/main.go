@@ -180,6 +180,7 @@ func runServe(args []string) int {
 		defer platformMu.Unlock()
 		if !c.PlatformEnabled() {
 			srv.SetPlatformBackend(nil)
+			srv.SetWorkflowService(nil)
 			if activePf != nil {
 				activePf.Close()
 				activePf = nil
@@ -190,6 +191,7 @@ func runServe(args []string) int {
 		if perr != nil {
 			slog.Error("platform init failed; platform route disabled", "error", perr)
 			srv.SetPlatformBackend(nil)
+			srv.SetWorkflowService(nil)
 			if activePf != nil {
 				activePf.Close()
 				activePf = nil
@@ -197,6 +199,7 @@ func runServe(args []string) int {
 			return
 		}
 		srv.SetPlatformBackend(pf)
+		srv.SetWorkflowService(pf.Workflows())
 		if activePf != nil {
 			activePf.Close() // 旧 backend の background loop を停止
 		}
